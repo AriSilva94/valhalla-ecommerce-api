@@ -1,0 +1,18 @@
+{
+  "collectionName": "components_institutional_testimonials",
+  "info": {
+    "displayName": "Testimonial"
+  },
+  "options": {},
+  "attributes": {
+    "quote": {
+      "type": "text"
+    },
+    "authorName": {
+      "type": "string"
+    },
+    "authorLocation": {
+      "type": "string"
+    }
+  }
+}

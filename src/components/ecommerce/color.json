@@ -1,0 +1,15 @@
+{
+  "collectionName": "components_ecommerce_colors",
+  "info": {
+    "displayName": "Color"
+  },
+  "options": {},
+  "attributes": {
+    "name": {
+      "type": "string"
+    },
+    "hex": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "kind": "singleType",
+  "collectionName": "homepage",
+  "info": {
+    "singularName": "homepage",
+    "pluralName": "homepages",
+    "displayName": "Homepage"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "hero": {
+      "type": "component",
+      "repeatable": false,
+      "component": "institutional.hero"
+    },
+    "benefits": {
+      "type": "component",
+      "repeatable": true,
+      "component": "institutional.benefit"
+    },
+    "steps": {
+      "type": "component",
+      "repeatable": true,
+      "component": "institutional.step"
+    },
+    "testimonials": {
+      "type": "component",
+      "repeatable": true,
+      "component": "institutional.testimonial"
+    },
+    "whatsappBanner": {
+      "type": "component",
+      "repeatable": false,
+      "component": "institutional.banner"
+    }
+  }
+}

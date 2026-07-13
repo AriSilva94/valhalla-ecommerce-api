@@ -1,0 +1,75 @@
+{
+  "kind": "singleType",
+  "collectionName": "site_settings",
+  "info": {
+    "singularName": "site-setting",
+    "pluralName": "site-settings",
+    "displayName": "Site Settings"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "whatsappNumber": {
+      "type": "string",
+      "required": true
+    },
+    "showTopBar": {
+      "type": "boolean",
+      "default": true
+    },
+    "topBarText": {
+      "type": "string"
+    },
+    "showFab": {
+      "type": "boolean",
+      "default": true
+    },
+    "footerTagline": {
+      "type": "text"
+    },
+    "footerLinkColumns": {
+      "type": "component",
+      "repeatable": true,
+      "component": "institutional.link-column"
+    },
+    "footerLegalText": {
+      "type": "text"
+    },
+    "contactEmail": {
+      "type": "string"
+    },
+    "contactAddress": {
+      "type": "string"
+    },
+    "contactHours": {
+      "type": "string"
+    },
+    "aboutEyebrow": {
+      "type": "string"
+    },
+    "aboutHeadline": {
+      "type": "string"
+    },
+    "aboutText": {
+      "type": "richtext"
+    },
+    "aboutStats": {
+      "type": "component",
+      "repeatable": true,
+      "component": "institutional.stat"
+    },
+    "aboutImage": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": ["images"]
+    },
+    "defaultSeo": {
+      "type": "component",
+      "repeatable": false,
+      "component": "shared.seo"
+    }
+  }
+}

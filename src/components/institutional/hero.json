@@ -1,0 +1,41 @@
+{
+  "collectionName": "components_institutional_heroes",
+  "info": {
+    "displayName": "Hero"
+  },
+  "options": {},
+  "attributes": {
+    "eyebrow": {
+      "type": "string"
+    },
+    "headlineAccent": {
+      "type": "string"
+    },
+    "headline": {
+      "type": "string"
+    },
+    "headlineHighlight": {
+      "type": "string"
+    },
+    "subtext": {
+      "type": "text"
+    },
+    "ctaLabel": {
+      "type": "string"
+    },
+    "ctaLink": {
+      "type": "string"
+    },
+    "secondaryCtaLabel": {
+      "type": "string"
+    },
+    "secondaryCtaLink": {
+      "type": "string"
+    },
+    "trustBadges": {
+      "type": "component",
+      "repeatable": true,
+      "component": "institutional.trust-badge"
+    }
+  }
+}

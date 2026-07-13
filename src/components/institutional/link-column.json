@@ -1,0 +1,17 @@
+{
+  "collectionName": "components_institutional_link_columns",
+  "info": {
+    "displayName": "Link Column"
+  },
+  "options": {},
+  "attributes": {
+    "title": {
+      "type": "string"
+    },
+    "links": {
+      "type": "component",
+      "repeatable": true,
+      "component": "institutional.link"
+    }
+  }
+}

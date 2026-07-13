@@ -1,0 +1,12 @@
+{
+  "collectionName": "components_institutional_trust_badges",
+  "info": {
+    "displayName": "Trust Badge"
+  },
+  "options": {},
+  "attributes": {
+    "text": {
+      "type": "string"
+    }
+  }
+}
