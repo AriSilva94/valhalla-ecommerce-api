@@ -1,5 +1,7 @@
 import type { Core } from '@strapi/strapi';
 
+import { registerProductAutofill } from './utils/product-autofill-middleware';
+
 // Content types the frontend reads without auth. Grant these to the Public role
 // on every boot so a fresh database (e.g. a new Postgres deploy) serves the API.
 const PUBLIC_READ: Record<string, string[]> = {
@@ -14,7 +16,9 @@ const PUBLIC_READ: Record<string, string[]> = {
 };
 
 export default {
-  register(/* { strapi }: { strapi: Core.Strapi } */) {},
+  register({ strapi }: { strapi: Core.Strapi }) {
+    registerProductAutofill(strapi);
+  },
 
   async bootstrap({ strapi }: { strapi: Core.Strapi }) {
     const publicRole = await strapi.db

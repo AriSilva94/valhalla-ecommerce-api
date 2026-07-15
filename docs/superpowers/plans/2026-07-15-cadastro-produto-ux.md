@@ -195,19 +195,21 @@ git commit -m "feat: variantes como componente repetivel no produto"
 
 ---
 
-### Task 3: Lifecycles — SKU, slug e SEO automáticos
+### Task 3: Middleware — SKU, slug e SEO automáticos
 
 **Files:**
 - Create: `src/utils/product-autofill.ts`
 - Create: `src/utils/__tests__/product-autofill.test.ts`
-- Create: `src/api/product/content-types/product/lifecycles.ts`
+- Create: `src/utils/__tests__/product-autofill-middleware.test.ts`
+- Create: `src/utils/product-autofill-middleware.ts`
+- Modify: `src/index.ts`
 - Modify: `package.json` (vitest + script test)
 
 **Interfaces:**
 - Consumes: nomes de campos de `ecommerce.variant` (Task 2): `sku`, `colorName`, `configLabel`.
-- Produces: `slugify(text: string): string`, `fillVariantSkus<T>(productSlug: string, variants: T[]): T[]`, `buildSeoDefaults(name: string, description: string | null | undefined, existing?: { metaTitle?: string | null; metaDescription?: string | null } | null): { metaTitle: string; metaDescription: string }`.
+- Produces: `slugify(text: string): string`, `fillVariantSkus<T>(productSlug: string, variants: T[], reservedSkus?: Iterable<string>): T[]`, `buildSeoDefaults(name: string, description: string | null | undefined, existing?: { metaTitle?: string | null; metaDescription?: string | null } | null): { metaTitle: string; metaDescription: string }` e `autofillProductData(data, existing?, reservedSkus?)`.
 
-- [ ] **Step 1: Instalar vitest e adicionar script**
+- [x] **Step 1: Instalar vitest e adicionar script**
 
 ```bash
 npm install --save-dev vitest
@@ -215,7 +217,7 @@ npm install --save-dev vitest
 
 Em `package.json`, adicionar em `scripts`: `"test": "vitest run"`.
 
-- [ ] **Step 2: Escrever testes que falham — `src/utils/__tests__/product-autofill.test.ts`**
+- [x] **Step 2: Escrever testes que falham — `src/utils/__tests__/product-autofill.test.ts`**
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -278,7 +280,7 @@ describe('buildSeoDefaults', () => {
 });
 ```
 
-- [ ] **Step 3: Rodar e ver falhar**
+- [x] **Step 3: Rodar e ver falhar**
 
 ```bash
 npx vitest run
@@ -286,7 +288,7 @@ npx vitest run
 
 Expected: FAIL — módulo `../product-autofill` não existe.
 
-- [ ] **Step 4: Implementar `src/utils/product-autofill.ts`**
+- [x] **Step 4: Implementar `src/utils/product-autofill.ts`**
 
 ```ts
 const stripAccents = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -356,51 +358,54 @@ export function buildSeoDefaults(
 }
 ```
 
-- [ ] **Step 5: Rodar testes**
+- [x] **Step 5: Rodar testes**
 
 ```bash
 npx vitest run
 ```
 
-Expected: PASS (8 testes).
+Expected: PASS (14 testes: os 8 originais, 1 de colisão de SKU reservado, 4 de criação/update parcial e 1 de serialização assíncrona no middleware).
 
-- [ ] **Step 6: Criar `src/api/product/content-types/product/lifecycles.ts`**
+- [x] **Step 6: Criar e registrar `src/utils/product-autofill-middleware.ts`**
+
+Trecho simplificado do registro (helpers puros, carregamento de estado e coleta de SKUs ficam no mesmo módulo):
 
 ```ts
-import { slugify, fillVariantSkus, buildSeoDefaults } from '../../../../utils/product-autofill';
+import type { Core } from '@strapi/strapi';
 
-function autofill(data: any) {
-  if (!data) return;
+import { buildSeoDefaults, fillVariantSkus, slugify } from './product-autofill';
 
-  // Slug: gerado do nome se vazio (campo fica oculto no admin).
-  if (data.name && (!data.slug || !String(data.slug).trim())) {
-    data.slug = slugify(data.name);
-  }
+export function registerProductAutofill(strapi: Core.Strapi): void {
+  strapi.documents.use(async (context, next) => {
+    if (context.uid !== 'api::product.product') return next();
+    if (
+      context.action !== 'create' &&
+      context.action !== 'update' &&
+      context.action !== 'clone'
+    ) {
+      return next();
+    }
 
-  // SKUs das variações.
-  if (Array.isArray(data.variants) && data.slug) {
-    data.variants = fillVariantSkus(data.slug, data.variants);
-  }
-
-  // SEO: preenche apenas o que estiver vazio.
-  if (data.name) {
-    data.seo = { ...(data.seo || {}), ...buildSeoDefaults(data.name, data.description, data.seo) };
-  }
+    return serializeProductWrite(async () => {
+      // create/update: carrega estado quando necessário e transforma o patch cru.
+      // clone: carrega a fonte, remove IDs de componentes e reserva também os SKUs da fonte.
+      return next();
+    });
+  });
 }
-
-export default {
-  beforeCreate(event: any) {
-    autofill(event.params.data);
-  },
-  beforeUpdate(event: any) {
-    autofill(event.params.data);
-  },
-};
 ```
 
-Nota: unicidade global de SKU decorre do prefixo = slug do produto (uid único). Título SEO usa apenas o nome (marca chega como shape de relação instável no payload — fora do autofill).
+Em `src/index.ts`, chamar `registerProductAutofill(strapi)` dentro de `register({ strapi })`.
 
-- [ ] **Step 7: Verificação manual**
+Nota: no Strapi 5, componentes são resolvidos antes dos database lifecycles; o middleware do Document Service preserva o payload cru necessário para preencher variantes e SEO.
+
+No update, o middleware carrega o draft persistido por `documentId`/locale (com fallback para published) para distinguir campo omitido de campo vazio. Antes de preencher variantes em create/update/clone, consulta via Document Service os SKUs das versões draft/published. Update exclui o próprio `documentId`; clone inclui a fonte, regenera os SKUs e remove IDs dos componentes reinjetados.
+
+As actions de escrita Product (`create`, `update` e `clone`) são serializadas por uma fila module-scoped desde antes da consulta de SKUs até `await next()` concluir. A garantia vale por instância/processo; um deploy com múltiplas réplicas exigiria lock distribuído, fora do plano e do deploy atual.
+
+Nota: unicidade global de SKU é aplicada reservando os SKUs já persistidos; SKUs gerados também usam o slug único como prefixo. Título SEO usa apenas o nome (marca chega como shape de relação instável no payload — fora do autofill).
+
+- [x] **Step 7: Verificação manual**
 
 ```bash
 npm run develop
@@ -414,10 +419,12 @@ curl "http://localhost:1337/api/products?filters[slug][$eq]=teste-lifecycle&popu
 
 Expected: `slug: "teste-lifecycle"`, variantes com `sku` `TESTE-LIFECYCLE-...-1/2`, `seo.metaTitle` = nome.
 
-- [ ] **Step 8: Commit**
+Clonar um produto mantém o SKU da fonte intacto, cria novos IDs de componente e atribui sufixo incremental ao SKU do clone; fonte e clone publicados devem refletir esses valores na REST API.
+
+- [x] **Step 8: Commit**
 
 ```bash
-git add package.json package-lock.json src/utils/ src/api/product/content-types/product/lifecycles.ts
+git add package.json package-lock.json src/utils/ src/index.ts docs/superpowers/plans/2026-07-15-cadastro-produto-ux.md
 git commit -m "feat: autofill de slug, SKU e SEO via lifecycles do produto"
 ```
 
