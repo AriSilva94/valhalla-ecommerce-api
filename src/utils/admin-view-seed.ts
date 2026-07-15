@@ -20,7 +20,29 @@ const CONTENT_TYPE_PREFIX =
   "plugin_content_manager_configuration_content_types::";
 const COMPONENT_PREFIX = "plugin_content_manager_configuration_components::";
 
-const PRODUCT_PATCH: ViewPatch = {
+const PRODUCT_EDIT_LAYOUT = [
+  [
+    { name: "name", size: 6 },
+    { name: "basePrice", size: 6 },
+  ],
+  [
+    { name: "mainImage", size: 6 },
+    { name: "gallery", size: 6 },
+  ],
+  [{ name: "variantGroupLabel", size: 6 }],
+  [{ name: "variants", size: 12 }],
+  [{ name: "description", size: 12 }],
+  [{ name: "specs", size: 12 }],
+  [{ name: "warranty", size: 6 }],
+  [
+    { name: "brand", size: 6 },
+    { name: "category", size: 6 },
+  ],
+  [{ name: "tags", size: 12 }],
+  [{ name: "seo", size: 12 }],
+];
+
+const PRODUCT_V1_PATCH: ViewPatch = {
   settings: {
     defaultSortBy: "updatedAt",
     defaultSortOrder: "DESC",
@@ -28,27 +50,6 @@ const PRODUCT_PATCH: ViewPatch = {
     mainField: "name",
   },
   listFields: ["mainImage", "name", "basePrice", "category"],
-  editLayout: [
-    [
-      { name: "name", size: 6 },
-      { name: "basePrice", size: 6 },
-    ],
-    [
-      { name: "mainImage", size: 6 },
-      { name: "gallery", size: 6 },
-    ],
-    [{ name: "variantGroupLabel", size: 6 }],
-    [{ name: "variants", size: 12 }],
-    [{ name: "description", size: 12 }],
-    [{ name: "specs", size: 12 }],
-    [{ name: "warranty", size: 6 }],
-    [
-      { name: "brand", size: 6 },
-      { name: "category", size: 6 },
-    ],
-    [{ name: "tags", size: 12 }],
-    [{ name: "seo", size: 12 }],
-  ],
   fields: {
     name: { label: "Nome do produto" },
     slug: { hidden: true },
@@ -85,6 +86,16 @@ const PRODUCT_PATCH: ViewPatch = {
   },
 };
 
+const PRODUCT_V2_PATCH: ViewPatch = {
+  fields: {},
+  editLayout: PRODUCT_EDIT_LAYOUT,
+};
+
+const PRODUCT_PATCH: ViewPatch = {
+  ...PRODUCT_V1_PATCH,
+  editLayout: PRODUCT_EDIT_LAYOUT,
+};
+
 const VARIANT_PATCH: ViewPatch = {
   fields: {
     sku: {
@@ -111,7 +122,7 @@ const VARIANT_PATCH: ViewPatch = {
   },
 };
 
-const SIMPLE_PATCHES: Record<string, ViewPatch> = {
+const V1_SIMPLE_PATCHES: Record<string, ViewPatch> = {
   [`${CONTENT_TYPE_PREFIX}api::brand.brand`]: {
     fields: {
       name: { label: "Nome" },
@@ -162,6 +173,28 @@ const SIMPLE_PATCHES: Record<string, ViewPatch> = {
       body: { label: "Texto" },
     },
   },
+  [`${COMPONENT_PREFIX}shared.seo`]: {
+    fields: {
+      metaTitle: {
+        label: "Título (SEO)",
+        description: "Até 60 caracteres. Vazio = usa o nome do produto",
+      },
+      metaDescription: {
+        label: "Descrição (SEO)",
+        description: "Até 155 caracteres. Vazio = usa a descrição do produto",
+      },
+      shareImage: { label: "Imagem de compartilhamento" },
+    },
+  },
+  [`${COMPONENT_PREFIX}ecommerce.spec`]: {
+    fields: {
+      key: { label: "Característica" },
+      value: { label: "Valor" },
+    },
+  },
+};
+
+const V2_NEW_PATCHES: Record<string, ViewPatch> = {
   [`${CONTENT_TYPE_PREFIX}api::homepage.homepage`]: {
     fields: {
       hero: {
@@ -209,25 +242,6 @@ const SIMPLE_PATCHES: Record<string, ViewPatch> = {
         description:
           "Usado nas páginas que não possuem configurações próprias de SEO",
       },
-    },
-  },
-  [`${COMPONENT_PREFIX}shared.seo`]: {
-    fields: {
-      metaTitle: {
-        label: "Título (SEO)",
-        description: "Até 60 caracteres. Vazio = usa o nome do produto",
-      },
-      metaDescription: {
-        label: "Descrição (SEO)",
-        description: "Até 155 caracteres. Vazio = usa a descrição do produto",
-      },
-      shareImage: { label: "Imagem de compartilhamento" },
-    },
-  },
-  [`${COMPONENT_PREFIX}ecommerce.spec`]: {
-    fields: {
-      key: { label: "Característica" },
-      value: { label: "Valor" },
     },
   },
   [`${COMPONENT_PREFIX}institutional.banner`]: {
@@ -315,7 +329,13 @@ const SIMPLE_PATCHES: Record<string, ViewPatch> = {
 const ALL_PATCHES: Record<string, ViewPatch> = {
   [`${CONTENT_TYPE_PREFIX}api::product.product`]: PRODUCT_PATCH,
   [`${COMPONENT_PREFIX}ecommerce.variant`]: VARIANT_PATCH,
-  ...SIMPLE_PATCHES,
+  ...V1_SIMPLE_PATCHES,
+  ...V2_NEW_PATCHES,
+};
+
+const V2_MIGRATION_PATCHES: Record<string, ViewPatch> = {
+  [`${CONTENT_TYPE_PREFIX}api::product.product`]: PRODUCT_V2_PATCH,
+  ...V2_NEW_PATCHES,
 };
 
 interface ParseResult {
@@ -464,6 +484,7 @@ export async function seedAdminViews(strapi: Core.Strapi): Promise<void> {
   if (currentVersion >= SEED_VERSION) return;
 
   const preparedConfigs: Array<{
+    key: string;
     row: { id: number };
     config: Record<string, any>;
     patch: ViewPatch;
@@ -506,18 +527,10 @@ export async function seedAdminViews(strapi: Core.Strapi): Promise<void> {
       continue;
     }
 
-    preparedConfigs.push({ row, config: parsedConfig.value, patch });
+    preparedConfigs.push({ key, row, config: parsedConfig.value, patch });
   }
 
   if (validationFailed) return;
-
-  for (const { row, config, patch } of preparedConfigs) {
-    applyPatch(config, patch);
-    await coreStore.update({
-      where: { id: row.id },
-      data: { value: JSON.stringify(config) },
-    });
-  }
 
   const data = {
     key: MARKER_KEY,
@@ -527,8 +540,22 @@ export async function seedAdminViews(strapi: Core.Strapi): Promise<void> {
     tag: "",
   };
 
-  if (marker) await coreStore.update({ where: { id: marker.id }, data });
-  else await coreStore.create({ data });
+  await strapi.db.transaction(async () => {
+    for (const { key, row, config, patch } of preparedConfigs) {
+      const patchForCurrentVersion =
+        currentVersion === 1 ? V2_MIGRATION_PATCHES[key] : patch;
+      if (!patchForCurrentVersion) continue;
+
+      applyPatch(config, patchForCurrentVersion);
+      await coreStore.update({
+        where: { id: row.id },
+        data: { value: JSON.stringify(config) },
+      });
+    }
+
+    if (marker) await coreStore.update({ where: { id: marker.id }, data });
+    else await coreStore.create({ data });
+  });
 
   strapi.log.info("[admin-view-seed] views do admin configuradas (pt-BR)");
 }

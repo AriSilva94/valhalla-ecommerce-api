@@ -184,8 +184,21 @@ function makeHarness(keys: string[] = Object.keys(PATCH_FIELDS)) {
   };
 
   const log = { info: vi.fn(), warn: vi.fn() };
+  const transaction = vi.fn(async (callback: () => Promise<unknown>) => {
+    const snapshot = new Map(
+      [...rows.entries()].map(([key, row]) => [key, { ...row }]),
+    );
+
+    try {
+      return await callback();
+    } catch (error) {
+      rows.clear();
+      for (const [key, row] of snapshot) rows.set(key, row);
+      throw error;
+    }
+  });
   const strapi = {
-    db: { query: vi.fn(() => coreStore) },
+    db: { query: vi.fn(() => coreStore), transaction },
     log,
   };
 
@@ -193,6 +206,7 @@ function makeHarness(keys: string[] = Object.keys(PATCH_FIELDS)) {
     coreStore,
     log,
     rows,
+    transaction,
     strapi: strapi as never,
     config(key: string) {
       return JSON.parse(rows.get(key)!.value);
@@ -290,6 +304,105 @@ describe("seedAdminViews", () => {
     ).toBe("Nome do produto");
     expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(2));
     expect(harness.coreStore.create).not.toHaveBeenCalled();
+  });
+
+  it("migra v1 para v2 sem sobrescrever customizações dos patches antigos", async () => {
+    const harness = makeHarness();
+    const productKey = `${CONTENT_TYPE_PREFIX}api::product.product`;
+    const variantKey = `${COMPONENT_PREFIX}ecommerce.variant`;
+    const brandKey = `${CONTENT_TYPE_PREFIX}api::brand.brand`;
+    const homepageKey = `${CONTENT_TYPE_PREFIX}api::homepage.homepage`;
+    const product = harness.config(productKey);
+    const variant = harness.config(variantKey);
+    const brand = harness.config(brandKey);
+
+    product.settings.pageSize = 17;
+    product.settings.defaultSortBy = "name";
+    product.metadatas.name.edit.label = "Nome personalizado";
+    product.metadatas.name.list.label = "Nome personalizado";
+    product.layouts.list = ["name"];
+    variant.metadatas.sku.edit.label = "SKU personalizado";
+    variant.metadatas.sku.list.label = "SKU personalizado";
+    brand.metadatas.name.edit.label = "Marca personalizada";
+    brand.metadatas.name.list.label = "Marca personalizada";
+    harness.rows.get(productKey)!.value = JSON.stringify(product);
+    harness.rows.get(variantKey)!.value = JSON.stringify(variant);
+    harness.rows.get(brandKey)!.value = JSON.stringify(brand);
+    harness.rows.set(MARKER_KEY, {
+      id: 99,
+      key: MARKER_KEY,
+      value: JSON.stringify(1),
+      type: "number",
+      environment: "",
+      tag: "",
+    });
+
+    await seedAdminViews(harness.strapi);
+
+    expect(harness.config(productKey).settings).toMatchObject({
+      pageSize: 17,
+      defaultSortBy: "name",
+    });
+    expect(harness.config(productKey).metadatas.name.edit.label).toBe(
+      "Nome personalizado",
+    );
+    expect(harness.config(productKey).layouts.list).toEqual(["name"]);
+    expect(harness.config(variantKey).metadatas.sku.edit.label).toBe(
+      "SKU personalizado",
+    );
+    expect(harness.config(brandKey).metadatas.name.edit.label).toBe(
+      "Marca personalizada",
+    );
+    expect(harness.config(homepageKey).metadatas.hero.edit.label).toBe(
+      "Destaque principal",
+    );
+    expect(harness.config(productKey).layouts.edit).toEqual([
+      [
+        { name: "name", size: 6 },
+        { name: "basePrice", size: 6 },
+      ],
+      [
+        { name: "mainImage", size: 6 },
+        { name: "gallery", size: 6 },
+      ],
+      [{ name: "variantGroupLabel", size: 6 }],
+      [{ name: "variants", size: 12 }],
+      [{ name: "description", size: 12 }],
+      [{ name: "specs", size: 12 }],
+      [{ name: "warranty", size: 6 }],
+      [
+        { name: "brand", size: 6 },
+        { name: "category", size: 6 },
+      ],
+      [{ name: "tags", size: 12 }],
+      [{ name: "seo", size: 12 }],
+    ]);
+    const expectedUpdatedIds = [
+      productKey,
+      homepageKey,
+      `${CONTENT_TYPE_PREFIX}api::site-setting.site-setting`,
+      `${COMPONENT_PREFIX}institutional.banner`,
+      `${COMPONENT_PREFIX}institutional.benefit`,
+      `${COMPONENT_PREFIX}institutional.hero`,
+      `${COMPONENT_PREFIX}institutional.link-column`,
+      `${COMPONENT_PREFIX}institutional.link`,
+      `${COMPONENT_PREFIX}institutional.stat`,
+      `${COMPONENT_PREFIX}institutional.step`,
+      `${COMPONENT_PREFIX}institutional.testimonial`,
+      `${COMPONENT_PREFIX}institutional.trust-badge`,
+    ].map((key) => harness.rows.get(key)!.id);
+    expectedUpdatedIds.push(99);
+    const updatedIds = harness.coreStore.update.mock.calls.map(
+      ([
+        {
+          where: { id },
+        },
+      ]) => id,
+    );
+    expect(updatedIds.sort((left, right) => left - right)).toEqual(
+      expectedUpdatedIds.sort((left, right) => left - right),
+    );
+    expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(2));
   });
 
   it("avisa sobre cada config ausente e não altera nenhuma config nem grava marker", async () => {
@@ -438,6 +551,31 @@ describe("seedAdminViews", () => {
     expect(harness.log.warn).toHaveBeenCalledWith(
       `[admin-view-seed] config inválida, adiada: ${variantKey} (campos esperados ausentes)`,
     );
+  });
+
+  it("reverte todos os updates quando uma escrita falha dentro da transação", async () => {
+    const harness = makeHarness();
+    const originalValues = new Map(
+      [...harness.rows.entries()].map(([key, row]) => [key, row.value]),
+    );
+    const updateImplementation =
+      harness.coreStore.update.getMockImplementation()!;
+    let updateCount = 0;
+    harness.coreStore.update.mockImplementation(async (args) => {
+      updateCount += 1;
+      if (updateCount === 2) throw new Error("falha de escrita simulada");
+      return updateImplementation(args);
+    });
+
+    await expect(seedAdminViews(harness.strapi)).rejects.toThrow(
+      "falha de escrita simulada",
+    );
+
+    expect(harness.transaction).toHaveBeenCalledOnce();
+    expect(harness.rows.has(MARKER_KEY)).toBe(false);
+    for (const [key, value] of originalValues) {
+      expect(harness.rows.get(key)?.value).toBe(value);
+    }
   });
 
   it("aplica todas as configs e cria o marker de versão", async () => {
