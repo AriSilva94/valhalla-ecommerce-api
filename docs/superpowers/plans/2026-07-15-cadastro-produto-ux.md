@@ -728,7 +728,7 @@ git commit -m "feat: seed idempotente das views do admin em pt-BR"
 - Consumes: API do produto com `variants` como componente (`colorName`, `colorHex` no lugar de `color` populado).
 - Produces: shape TS inalterado para os componentes React (`ProductVariant.color: {name, hex}`), exceto remoção de `documentId` (não usado fora de `strapi.ts`).
 
-- [ ] **Step 1: Editar `app/lib/strapi.ts`**
+- [x] **Step 1: Editar `app/lib/strapi.ts`**
 
 Interface `ProductVariant` (linhas 11–20) — remover `documentId`:
 
@@ -767,7 +767,7 @@ const PRODUCT_POPULATE =
   "populate[brand]=true&populate[category]=true&populate[tags]=true&populate[specs]=true&populate[variants][populate]=image&populate[seo][populate]=*";
 ```
 
-- [ ] **Step 2: Checar usos de `documentId` de variante**
+- [x] **Step 2: Checar usos de `documentId` de variante**
 
 ```bash
 cd C:\Users\ariov\Desktop\projetos\valhalla-ecommerce
@@ -776,7 +776,7 @@ grep -rn "variant" app --include=*.tsx | grep -i documentId
 
 Expected: nenhum resultado. Se houver, trocar por `sku`.
 
-- [ ] **Step 3: Build**
+- [x] **Step 3: Build**
 
 ```bash
 npm run build
@@ -784,7 +784,7 @@ npm run build
 
 Expected: build sem erro de tipo.
 
-- [ ] **Step 4: Verificação visual** — com Strapi local rodando (produto de teste da Task 3 publicado):
+- [x] **Step 4: Verificação visual** — com Strapi local rodando (produto de teste da Task 3 publicado):
 
 ```bash
 npm run dev
@@ -792,7 +792,7 @@ npm run dev
 
 Abrir `http://localhost:3000/p/teste-lifecycle`. Expected: variações com bolinhas de cor, preço trocando por variação, botão de carrinho funcionando (item usa `sku`).
 
-- [ ] **Step 5: Commit (no repo frontend)**
+- [x] **Step 5: Commit (no repo frontend)**
 
 ```bash
 git add app/lib/strapi.ts
@@ -805,7 +805,7 @@ git commit -m "feat: variantes como componente do produto (novo shape da API)"
 
 **Files:** nenhum (checklist manual).
 
-- [ ] **Step 1: Banco limpo + fluxo completo**
+- [x] **Step 1: Banco limpo + fluxo completo**
 
 Com Strapi e Next rodando localmente:
 
@@ -818,7 +818,7 @@ Expected (critérios de sucesso da spec):
 - `curl "http://localhost:1337/api/products?populate[variants]=true&populate[seo]=true"` → SKUs gerados, slug gerado, SEO preenchido.
 - Página do produto no Next renderiza cores/preços/carrinho corretamente.
 
-- [ ] **Step 2: Rodar testes**
+- [x] **Step 2: Rodar testes**
 
 ```bash
 cd C:\Users\ariov\Desktop\projetos\valhalla-ecommerce-api && npx vitest run
@@ -826,6 +826,6 @@ cd C:\Users\ariov\Desktop\projetos\valhalla-ecommerce-api && npx vitest run
 
 Expected: PASS.
 
-- [ ] **Step 3: Anotar pendências de deploy**
+- [x] **Step 3: Anotar pendências de deploy**
 
 Deploy no dokploy (Postgres): banco novo → primeiro acesso ao admin gera configs default; seed aplica no boot seguinte (comportamento da Task 5 Step 4). Recadastrar produtos de teste manualmente (sem migração, conforme spec).
