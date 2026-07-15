@@ -493,15 +493,18 @@ git commit -m "feat: displayName dos content types em pt-BR"
 
 **Files:**
 - Create: `src/utils/admin-view-seed.ts`
+- Test: `src/utils/__tests__/admin-view-seed.test.ts`
 - Modify: `src/index.ts` (chamar seed no bootstrap)
 
 **Interfaces:**
 - Consumes: campos de `ecommerce.variant` (Task 2) e schemas PT-BR (Task 4).
 - Produces: `seedAdminViews(strapi: Core.Strapi): Promise<void>` chamada no bootstrap.
 
-**Mecânica:** configurações de view ficam no core store (`strapi::core-store`), chaves `plugin_content_manager_configuration_content_types::<uid>` e `plugin_content_manager_configuration_components::<uid>`, valor JSON `{ settings, metadatas, layouts }`. O seed faz **merge** sobre a config default gerada pelo Strapi. Marker `valhalla_admin_seed_version` garante execução única; se alguma chave ainda não existir no boot (banco novo), o marker não é gravado e o seed roda de novo no próximo boot.
+**Mecânica:** configurações de view ficam no core store (`strapi::core-store`), chaves `plugin_content_manager_configuration_content_types::<uid>` e `plugin_content_manager_configuration_components::<uid>`, valor JSON `{ settings, metadatas, layouts }`. O seed faz **merge** sobre a config default gerada pelo Strapi. Marker `valhalla_admin_seed_version` garante execução única; se alguma chave ainda não existir no boot (banco novo), o marker não é gravado e o seed roda de novo no próximo boot. JSON ou estruturas inválidas, inclusive rows/cells de layout e metadatas internas, geram warning, não derrubam o bootstrap nem são atualizadas, e impedem a gravação do marker para permitir nova tentativa. Marker inválido é tratado como versão 0 e corrigido após uma aplicação completa.
 
-- [ ] **Step 1: Criar `src/utils/admin-view-seed.ts`**
+**Verificação automatizada:** 21 testes do seed; 35 testes no backend ao todo.
+
+- [x] **Step 1: Criar `src/utils/admin-view-seed.ts`**
 
 ```ts
 import type { Core } from '@strapi/strapi';
@@ -675,7 +678,7 @@ export async function seedAdminViews(strapi: Core.Strapi): Promise<void> {
 }
 ```
 
-- [ ] **Step 2: Chamar no bootstrap — `src/index.ts`**
+- [x] **Step 2: Chamar no bootstrap — `src/index.ts`**
 
 No topo: `import { seedAdminViews } from './utils/admin-view-seed';`
 No fim da função `bootstrap`, após o loop de permissões:
@@ -684,7 +687,7 @@ No fim da função `bootstrap`, após o loop de permissões:
 await seedAdminViews(strapi);
 ```
 
-- [ ] **Step 3: Verificar em banco existente**
+- [x] **Step 3: Verificar em banco existente**
 
 ```bash
 npm run develop
@@ -692,7 +695,7 @@ npm run develop
 
 Expected: log `[admin-view-seed] views do admin configuradas (pt-BR)`. No admin: edit view do Produto sem campo slug, labels PT-BR com textos de ajuda, list view com colunas imagem/nome/preço/categoria. Reiniciar o Strapi: seed NÃO roda de novo (sem novo log).
 
-- [ ] **Step 4: Verificar em banco novo (simula deploy dokploy)**
+- [x] **Step 4: Verificar em banco novo (simula deploy dokploy)**
 
 ```powershell
 Copy-Item .tmp\data.db .tmp\data.db.bak; Remove-Item .tmp\data.db
@@ -703,11 +706,11 @@ Expected: primeiro boot pode logar `config ausente, adiada` (aceitável); abrir 
 
 Se as configs default NÃO aparecerem no core store nem após abrir o admin: investigar formato/momento de geração na 5.50.1 antes de prosseguir (risco mapeado na spec).
 
-- [ ] **Step 5: Testar criação de produto com slug oculto**
+- [x] **Step 5: Testar criação de produto com slug oculto**
 
 No admin (slug agora invisível): criar produto novo só com nome/preço/variação. Expected: salva sem erro e `slug` vem preenchido (lifecycle da Task 3 garante).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/utils/admin-view-seed.ts src/index.ts

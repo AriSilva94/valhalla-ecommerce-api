@@ -1,5 +1,6 @@
 import type { Core } from '@strapi/strapi';
 
+import { seedAdminViews } from './utils/admin-view-seed';
 import { registerProductAutofill } from './utils/product-autofill-middleware';
 
 // Content types the frontend reads without auth. Grant these to the Public role
@@ -25,21 +26,23 @@ export default {
       .query('plugin::users-permissions.role')
       .findOne({ where: { type: 'public' } });
 
-    if (!publicRole) return;
+    if (publicRole) {
+      for (const [uid, actions] of Object.entries(PUBLIC_READ)) {
+        for (const action of actions) {
+          const actionId = `${uid}.${action}`;
+          const existing = await strapi.db
+            .query('plugin::users-permissions.permission')
+            .findOne({ where: { action: actionId, role: publicRole.id } });
 
-    for (const [uid, actions] of Object.entries(PUBLIC_READ)) {
-      for (const action of actions) {
-        const actionId = `${uid}.${action}`;
-        const existing = await strapi.db
-          .query('plugin::users-permissions.permission')
-          .findOne({ where: { action: actionId, role: publicRole.id } });
-
-        if (!existing) {
-          await strapi.db.query('plugin::users-permissions.permission').create({
-            data: { action: actionId, role: publicRole.id },
-          });
+          if (!existing) {
+            await strapi.db.query('plugin::users-permissions.permission').create({
+              data: { action: actionId, role: publicRole.id },
+            });
+          }
         }
       }
     }
+
+    await seedAdminViews(strapi);
   },
 };
