@@ -31,7 +31,7 @@
 **Interfaces:**
 - Produces: custom field `plugin::color-picker.color` disponível para schemas (Task 2); admin com locale pt-BR.
 
-- [ ] **Step 1: Instalar plugin oficial**
+- [x] **Step 1: Instalar plugin oficial**
 
 ```bash
 cd C:\Users\ariov\Desktop\projetos\valhalla-ecommerce-api
@@ -41,7 +41,7 @@ npm install @strapi/plugin-color-picker
 
 Expected: instalação sem erro. Se `npm info` mostrar que o pacote não suporta Strapi 5.x, PARAR e reportar (não substituir por plugin de comunidade sem aprovação).
 
-- [ ] **Step 2: Criar `src/admin/app.tsx`**
+- [x] **Step 2: Criar `src/admin/app.tsx`**
 
 ```tsx
 import type { StrapiApp } from '@strapi/strapi/admin';
@@ -60,7 +60,7 @@ export default {
 };
 ```
 
-- [ ] **Step 3: Verificar boot**
+- [x] **Step 3: Verificar boot**
 
 ```bash
 npm run develop
@@ -68,7 +68,7 @@ npm run develop
 
 Expected: admin compila e sobe sem erro. No admin, em perfil do usuário, idioma "Português (Brasil)" disponível; selecionar e conferir menus em PT-BR.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add package.json package-lock.json src/admin/app.tsx
