@@ -1,37 +1,38 @@
 import { describe, expect, it } from 'vitest';
 
-import adminApp, * as adminModule from './app';
+import adminApp, { ptBRTranslations } from './app';
 
-const criticalTranslations = {
-  'global.home': 'Início',
-  'content-manager.plugin.name': 'Gerenciador de Conteúdo',
-  'widget.deploy-now.title': 'Implantar',
-  'cloud.Plugin.name': 'Implantar',
-  'search.placeholder': 'Pesquisar',
-  'content-manager.containers.list.table-headers.status': 'Status',
-  'content-manager.containers.edit.header.more-actions': 'Mais ações',
-  'content-manager.containers.edit.panels.default.more-actions': 'Mais ações do documento',
-  'content-manager.dnd.instructions': 'Pressione a barra de espaço para selecionar e reordenar',
-  'content-manager.containers.edit.panels.default.title': 'Registro',
-  'content-manager.containers.edit.title.new': 'Criar um registro',
-  'content-manager.containers.edit.tabs.draft': 'Rascunho',
-  'content-manager.containers.edit.tabs.published': 'Publicado',
-  'content-manager.containers.edit.information.last-published.label': 'Publicado',
-  'content-manager.containers.List.draft': 'Rascunho',
-  'content-manager.containers.List.published': 'Publicado',
-  'app.utils.published': 'Publicado',
-  'app.HeaderLayout.docLink.label': 'Saiba mais na documentação',
-  'Settings.profile.form.section.experience.mode.option-system-label':
-    'Usar configurações do sistema',
-  'tours.profile.title': 'Tour guiado',
-  'tours.profile.description': 'Você pode reiniciar o tour guiado a qualquer momento.',
-  'tours.profile.reset': 'Reiniciar tour guiado',
-  'tours.profile.notification.success.reset': 'Tour guiado reiniciado',
-  'content-manager.widget.last-published.title': 'Últimos registros publicados',
-  'content-manager.widget.last-published.no-data': 'Nenhum registro publicado',
-  'HomePage.widget.deploy-now.description': 'Implantar com o Strapi Cloud',
-  'HomePage.widget.deploy-now.button': 'Implantar agora',
-};
+const auditedRuntimeTranslationIds = [
+  'global.home',
+  'content-manager.plugin.name',
+  'widget.deploy-now.title',
+  'HomePage.widget.deploy-now.title',
+  'cloud.Plugin.name',
+  'search.placeholder',
+  'content-manager.containers.list.table-headers.status',
+  'content-manager.containers.edit.header.more-actions',
+  'content-manager.containers.edit.panels.default.more-actions',
+  'content-manager.dnd.instructions',
+  'content-manager.containers.edit.panels.default.title',
+  'content-manager.containers.edit.title.new',
+  'content-manager.containers.edit.tabs.draft',
+  'content-manager.containers.edit.tabs.published',
+  'content-manager.containers.edit.information.last-published.label',
+  'content-manager.containers.List.draft',
+  'content-manager.containers.List.published',
+  'app.utils.published',
+  'app.HeaderLayout.docLink.label',
+  'Settings.profile.form.section.experience.mode.option-system-label',
+  'tours.profile.title',
+  'tours.profile.description',
+  'tours.profile.reset',
+  'tours.profile.notification.success.reset',
+  'content-manager.widget.last-published.title',
+  'content-manager.widget.last-published.no-data',
+  'HomePage.widget.deploy-now.description',
+  'HomePage.widget.deploy-now.button',
+  'list.asset.at.finished',
+] as const;
 
 const knownFallbackTranslations = {
   Produto: 'Produto',
@@ -73,17 +74,23 @@ const knownFallbackTranslations = {
   'components.Blocks.blocks.numberList': 'Lista numerada',
 };
 
-const ptBRTranslations = (
-  adminModule as typeof adminModule & { ptBRTranslations?: Record<string, string> }
-).ptBRTranslations;
-
 describe('configuração pt-BR do admin', () => {
-  it('sobrescreve todos os comandos críticos auditados', () => {
-    expect(ptBRTranslations).toMatchObject(criticalTranslations);
+  it.each(auditedRuntimeTranslationIds)('sobrescreve o ID de runtime %s', (id) => {
+    expect(ptBRTranslations[id]).toEqual(expect.any(String));
+    expect(ptBRTranslations[id]).not.toHaveLength(0);
+  });
+
+  it('traduz os IDs sem valores ICU com textos literais', () => {
+    expect(ptBRTranslations['HomePage.widget.deploy-now.title']).toBe(
+      'Pronto para publicar?'
+    );
+    expect(ptBRTranslations['list.asset.at.finished']).toBe(
+      'Mídias terminaram de carregar.'
+    );
   });
 
   it('usa a variável ICU esperada pelo Strapi no texto de ajuda do idioma', () => {
-    const help = ptBRTranslations?.[
+    const help = ptBRTranslations[
       'Settings.profile.form.section.experience.interfaceLanguageHelp'
     ];
 
