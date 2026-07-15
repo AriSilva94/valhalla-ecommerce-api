@@ -1,8 +1,8 @@
-import type { StrapiApp } from '@strapi/strapi/admin';
+import { describe, expect, it } from 'vitest';
 
-export const ptBRTranslations: Record<string, string> = {
-  'app.components.LeftMenu.navbrand.title': 'Valhalla',
-  'app.components.LeftMenu.navbrand.workplace': 'Painel da loja',
+import adminApp, * as adminModule from './app';
+
+const criticalTranslations = {
   'global.home': 'Início',
   'content-manager.plugin.name': 'Gerenciador de Conteúdo',
   'widget.deploy-now.title': 'Implantar',
@@ -21,8 +21,6 @@ export const ptBRTranslations: Record<string, string> = {
   'content-manager.containers.List.published': 'Publicado',
   'app.utils.published': 'Publicado',
   'app.HeaderLayout.docLink.label': 'Saiba mais na documentação',
-  'Settings.profile.form.section.experience.interfaceLanguageHelp':
-    'As alterações de preferência se aplicam apenas a você. Mais informações estão disponíveis {here}.',
   'Settings.profile.form.section.experience.mode.option-system-label':
     'Usar configurações do sistema',
   'tours.profile.title': 'Tour guiado',
@@ -33,6 +31,9 @@ export const ptBRTranslations: Record<string, string> = {
   'content-manager.widget.last-published.no-data': 'Nenhum registro publicado',
   'HomePage.widget.deploy-now.description': 'Implantar com o Strapi Cloud',
   'HomePage.widget.deploy-now.button': 'Implantar agora',
+};
+
+const knownFallbackTranslations = {
   Produto: 'Produto',
   Categoria: 'Categoria',
   Etiqueta: 'Etiqueta',
@@ -72,12 +73,31 @@ export const ptBRTranslations: Record<string, string> = {
   'components.Blocks.blocks.numberList': 'Lista numerada',
 };
 
-export default {
-  config: {
-    locales: ['pt-BR'],
-    translations: {
-      'pt-BR': ptBRTranslations,
-    },
-  },
-  bootstrap(_app: StrapiApp) {},
-};
+const ptBRTranslations = (
+  adminModule as typeof adminModule & { ptBRTranslations?: Record<string, string> }
+).ptBRTranslations;
+
+describe('configuração pt-BR do admin', () => {
+  it('sobrescreve todos os comandos críticos auditados', () => {
+    expect(ptBRTranslations).toMatchObject(criticalTranslations);
+  });
+
+  it('usa a variável ICU esperada pelo Strapi no texto de ajuda do idioma', () => {
+    const help = ptBRTranslations?.[
+      'Settings.profile.form.section.experience.interfaceLanguageHelp'
+    ];
+
+    expect(help).toBe(
+      'As alterações de preferência se aplicam apenas a você. Mais informações estão disponíveis {here}.'
+    );
+    expect(help).not.toContain('{documentation}');
+  });
+
+  it('define os fallbacks conhecidos de content-types, campos e componentes', () => {
+    expect(ptBRTranslations).toMatchObject(knownFallbackTranslations);
+  });
+
+  it('registra o mesmo mapa exportado na configuração padrão do admin', () => {
+    expect(adminApp.config.translations['pt-BR']).toBe(ptBRTranslations);
+  });
+});

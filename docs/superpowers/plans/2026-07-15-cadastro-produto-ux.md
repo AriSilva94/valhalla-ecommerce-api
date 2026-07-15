@@ -31,6 +31,8 @@
 **Interfaces:**
 - Produces: custom field `plugin::color-picker.color` disponível para schemas (Task 2); admin com locale pt-BR.
 
+**Nota E2E:** o Strapi 5.50.1 deixou lacunas visíveis na tradução pt-BR; `src/admin/app.tsx` mantém overrides dos comandos e labels auditados.
+
 - [x] **Step 1: Instalar plugin oficial**
 
 ```bash
@@ -817,6 +819,8 @@ Expected (critérios de sucesso da spec):
 - Admin todo em PT-BR com textos de ajuda.
 - `curl "http://localhost:1337/api/products?populate[variants]=true&populate[seo]=true"` → SKUs gerados, slug gerado, SEO preenchido.
 - Página do produto no Next renderiza cores/preços/carrinho corretamente.
+
+Nota da auditoria E2E: os overrides de `src/admin/app.tsx` cobrem as lacunas pt-BR observadas no Strapi 5.50.1, inclusive a variável ICU `{here}` do perfil.
 
 - [x] **Step 2: Rodar testes**
 
