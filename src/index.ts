@@ -6,7 +6,6 @@ const PUBLIC_READ: Record<string, string[]> = {
   'api::homepage.homepage': ['find'],
   'api::site-setting.site-setting': ['find'],
   'api::product.product': ['find', 'findOne'],
-  'api::product-variant.product-variant': ['find', 'findOne'],
   'api::category.category': ['find', 'findOne'],
   'api::brand.brand': ['find', 'findOne'],
   'api::tag.tag': ['find', 'findOne'],

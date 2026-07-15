@@ -1,16 +1,5 @@
 import type { Schema, Struct } from '@strapi/strapi';
 
-export interface EcommerceColor extends Struct.ComponentSchema {
-  collectionName: 'components_ecommerce_colors';
-  info: {
-    displayName: 'Color';
-  };
-  attributes: {
-    hex: Schema.Attribute.String;
-    name: Schema.Attribute.String;
-  };
-}
-
 export interface EcommerceSpec extends Struct.ComponentSchema {
   collectionName: 'components_ecommerce_specs';
   info: {
@@ -19,6 +8,33 @@ export interface EcommerceSpec extends Struct.ComponentSchema {
   attributes: {
     key: Schema.Attribute.String;
     value: Schema.Attribute.String;
+  };
+}
+
+export interface EcommerceVariant extends Struct.ComponentSchema {
+  collectionName: 'components_ecommerce_variants';
+  info: {
+    description: 'Varia\u00E7\u00E3o de produto (cor/configura\u00E7\u00E3o) com pre\u00E7o pr\u00F3prio';
+    displayName: 'Varia\u00E7\u00E3o';
+  };
+  attributes: {
+    available: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    colorHex: Schema.Attribute.String &
+      Schema.Attribute.CustomField<
+        'plugin::color-picker.color',
+        {
+          format: 'hex';
+        }
+      >;
+    colorName: Schema.Attribute.String;
+    compareAtPrice: Schema.Attribute.Decimal;
+    configLabel: Schema.Attribute.String;
+    image: Schema.Attribute.Media<'images'>;
+    price: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    sku: Schema.Attribute.String;
+    stockQuantity: Schema.Attribute.Integer;
   };
 }
 
@@ -142,8 +158,8 @@ export interface SharedSeo extends Struct.ComponentSchema {
     name: 'Seo';
   };
   attributes: {
-    metaDescription: Schema.Attribute.Text & Schema.Attribute.Required;
-    metaTitle: Schema.Attribute.String & Schema.Attribute.Required;
+    metaDescription: Schema.Attribute.Text;
+    metaTitle: Schema.Attribute.String;
     shareImage: Schema.Attribute.Media<'images'>;
   };
 }
@@ -151,8 +167,8 @@ export interface SharedSeo extends Struct.ComponentSchema {
 declare module '@strapi/strapi' {
   export namespace Public {
     export interface ComponentSchemas {
-      'ecommerce.color': EcommerceColor;
       'ecommerce.spec': EcommerceSpec;
+      'ecommerce.variant': EcommerceVariant;
       'institutional.banner': InstitutionalBanner;
       'institutional.benefit': InstitutionalBenefit;
       'institutional.hero': InstitutionalHero;

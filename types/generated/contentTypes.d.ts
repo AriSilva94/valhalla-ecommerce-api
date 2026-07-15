@@ -590,47 +590,6 @@ export interface ApiPolicyPolicy extends Struct.CollectionTypeSchema {
   };
 }
 
-export interface ApiProductVariantProductVariant
-  extends Struct.CollectionTypeSchema {
-  collectionName: 'product_variants';
-  info: {
-    displayName: 'Product Variant';
-    pluralName: 'product-variants';
-    singularName: 'product-variant';
-  };
-  options: {
-    draftAndPublish: true;
-  };
-  attributes: {
-    available: Schema.Attribute.Boolean &
-      Schema.Attribute.Required &
-      Schema.Attribute.DefaultTo<true>;
-    color: Schema.Attribute.Component<'ecommerce.color', false>;
-    compareAtPrice: Schema.Attribute.Decimal;
-    configLabel: Schema.Attribute.String;
-    createdAt: Schema.Attribute.DateTime;
-    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-    image: Schema.Attribute.Media<'images'>;
-    locale: Schema.Attribute.String & Schema.Attribute.Private;
-    localizations: Schema.Attribute.Relation<
-      'oneToMany',
-      'api::product-variant.product-variant'
-    > &
-      Schema.Attribute.Private;
-    price: Schema.Attribute.Decimal & Schema.Attribute.Required;
-    product: Schema.Attribute.Relation<'manyToOne', 'api::product.product'>;
-    publishedAt: Schema.Attribute.DateTime;
-    sku: Schema.Attribute.String &
-      Schema.Attribute.Required &
-      Schema.Attribute.Unique;
-    stockQuantity: Schema.Attribute.Integer;
-    updatedAt: Schema.Attribute.DateTime;
-    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-  };
-}
-
 export interface ApiProductProduct extends Struct.CollectionTypeSchema {
   collectionName: 'products';
   info: {
@@ -667,10 +626,14 @@ export interface ApiProductProduct extends Struct.CollectionTypeSchema {
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     variantGroupLabel: Schema.Attribute.String;
-    variants: Schema.Attribute.Relation<
-      'oneToMany',
-      'api::product-variant.product-variant'
-    >;
+    variants: Schema.Attribute.Component<'ecommerce.variant', true> &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      >;
     warranty: Schema.Attribute.String;
   };
 }
@@ -1264,7 +1227,6 @@ declare module '@strapi/strapi' {
       'api::faq.faq': ApiFaqFaq;
       'api::homepage.homepage': ApiHomepageHomepage;
       'api::policy.policy': ApiPolicyPolicy;
-      'api::product-variant.product-variant': ApiProductVariantProductVariant;
       'api::product.product': ApiProductProduct;
       'api::site-setting.site-setting': ApiSiteSettingSiteSetting;
       'api::tag.tag': ApiTagTag;

@@ -89,9 +89,9 @@ git commit -m "feat: plugin color-picker e admin em pt-BR"
 
 **Interfaces:**
 - Consumes: custom field `plugin::color-picker.color` (Task 1).
-- Produces: componente `ecommerce.variant` com campos `sku`, `colorName`, `colorHex`, `configLabel`, `price`, `compareAtPrice`, `available`, `stockQuantity`, `image`. `Product.variants` = repeatable component (min 1). Tasks 3, 5 e 6 dependem desses nomes exatos.
+- Produces: componente `ecommerce.variant` com campos `sku`, `colorName`, `colorHex`, `configLabel`, `price`, `compareAtPrice`, `available`, `stockQuantity`, `image`. `Product.variants` = repeatable component obrigatório (min 1). Tasks 3, 5 e 6 dependem desses nomes exatos.
 
-- [ ] **Step 1: Criar `src/components/ecommerce/variant.json`**
+- [x] **Step 1: Criar `src/components/ecommerce/variant.json`**
 
 ```json
 {
@@ -143,35 +143,36 @@ git commit -m "feat: plugin color-picker e admin em pt-BR"
 }
 ```
 
-- [ ] **Step 2: Atualizar `src/api/product/content-types/product/schema.json`** — substituir o atributo `variants` (relação) por componente:
+- [x] **Step 2: Atualizar `src/api/product/content-types/product/schema.json`** — substituir o atributo `variants` (relação) por componente:
 
 ```json
 "variants": {
   "type": "component",
   "repeatable": true,
   "component": "ecommerce.variant",
+  "required": true,
   "min": 1
 }
 ```
 
 (Manter todos os demais atributos como estão.)
 
-- [ ] **Step 3: `src/components/shared/seo.json`** — trocar `"required": true` por `"required": false` em `metaTitle` e `metaDescription` (lifecycle preencherá; obrigatório travaria o form quando usuário adiciona o componente sem preencher).
+- [x] **Step 3: `src/components/shared/seo.json`** — trocar `"required": true` por `"required": false` em `metaTitle` e `metaDescription` (lifecycle preencherá; obrigatório travaria o form quando usuário adiciona o componente sem preencher).
 
-- [ ] **Step 4: Deletar collection antiga e componente color**
+- [x] **Step 4: Deletar collection antiga e componente color**
 
 ```powershell
 Remove-Item -Recurse -Force src\api\product-variant
 Remove-Item -Force src\components\ecommerce\color.json
 ```
 
-- [ ] **Step 5: `src/index.ts`** — remover a linha de PUBLIC_READ:
+- [x] **Step 5: `src/index.ts`** — remover a linha de PUBLIC_READ:
 
 ```ts
 'api::product-variant.product-variant': ['find', 'findOne'],
 ```
 
-- [ ] **Step 6: Verificar boot e API**
+- [x] **Step 6: Verificar boot e API**
 
 ```bash
 npm run develop
@@ -185,7 +186,7 @@ curl "http://localhost:1337/api/products?populate[variants][populate]=image"
 
 Expected: HTTP 200, produto com array `variants` contendo `colorName`, `colorHex`, `price`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A src/
