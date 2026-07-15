@@ -1,7 +1,8 @@
 {
   "collectionName": "components_institutional_steps",
   "info": {
-    "displayName": "Step"
+    "displayName": "Etapa",
+    "description": "Etapa da seção Como funciona"
   },
   "options": {},
   "attributes": {

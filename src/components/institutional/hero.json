@@ -1,7 +1,8 @@
 {
   "collectionName": "components_institutional_heroes",
   "info": {
-    "displayName": "Hero"
+    "displayName": "Destaque principal",
+    "description": "Conteúdo principal do topo da página inicial"
   },
   "options": {},
   "attributes": {

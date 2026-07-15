@@ -444,7 +444,8 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
 export interface ApiBrandBrand extends Struct.CollectionTypeSchema {
   collectionName: 'brands';
   info: {
-    displayName: 'Brand';
+    description: 'Marcas dos produtos';
+    displayName: 'Marca';
     pluralName: 'brands';
     singularName: 'brand';
   };
@@ -472,7 +473,8 @@ export interface ApiBrandBrand extends Struct.CollectionTypeSchema {
 export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
   collectionName: 'categories';
   info: {
-    displayName: 'Category';
+    description: 'Categorias de navega\u00E7\u00E3o da loja';
+    displayName: 'Categoria';
     pluralName: 'categories';
     singularName: 'category';
   };
@@ -504,7 +506,8 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
 export interface ApiFaqFaq extends Struct.CollectionTypeSchema {
   collectionName: 'faqs';
   info: {
-    displayName: 'FAQ';
+    description: 'Perguntas e respostas da p\u00E1gina de FAQ';
+    displayName: 'Pergunta Frequente';
     pluralName: 'faqs';
     singularName: 'faq';
   };
@@ -531,7 +534,8 @@ export interface ApiFaqFaq extends Struct.CollectionTypeSchema {
 export interface ApiHomepageHomepage extends Struct.SingleTypeSchema {
   collectionName: 'homepage';
   info: {
-    displayName: 'Homepage';
+    description: 'Conte\u00FAdo da p\u00E1gina inicial';
+    displayName: 'P\u00E1gina Inicial';
     pluralName: 'homepages';
     singularName: 'homepage';
   };
@@ -563,7 +567,8 @@ export interface ApiHomepageHomepage extends Struct.SingleTypeSchema {
 export interface ApiPolicyPolicy extends Struct.CollectionTypeSchema {
   collectionName: 'policies';
   info: {
-    displayName: 'Policy';
+    description: 'Pol\u00EDticas da loja (trocas, privacidade etc.)';
+    displayName: 'Pol\u00EDtica';
     pluralName: 'policies';
     singularName: 'policy';
   };
@@ -593,7 +598,8 @@ export interface ApiPolicyPolicy extends Struct.CollectionTypeSchema {
 export interface ApiProductProduct extends Struct.CollectionTypeSchema {
   collectionName: 'products';
   info: {
-    displayName: 'Product';
+    description: 'Produtos da loja, com varia\u00E7\u00F5es, imagens e pre\u00E7os';
+    displayName: 'Produto';
     pluralName: 'products';
     singularName: 'product';
   };
@@ -641,7 +647,8 @@ export interface ApiProductProduct extends Struct.CollectionTypeSchema {
 export interface ApiSiteSettingSiteSetting extends Struct.SingleTypeSchema {
   collectionName: 'site_settings';
   info: {
-    displayName: 'Site Settings';
+    description: 'WhatsApp, rodap\u00E9, contato e textos institucionais';
+    displayName: 'Configura\u00E7\u00F5es do Site';
     pluralName: 'site-settings';
     singularName: 'site-setting';
   };
@@ -687,7 +694,8 @@ export interface ApiSiteSettingSiteSetting extends Struct.SingleTypeSchema {
 export interface ApiTagTag extends Struct.CollectionTypeSchema {
   collectionName: 'tags';
   info: {
-    displayName: 'Tag';
+    description: 'Etiquetas para filtrar/agrupar produtos';
+    displayName: 'Etiqueta';
     pluralName: 'tags';
     singularName: 'tag';
   };

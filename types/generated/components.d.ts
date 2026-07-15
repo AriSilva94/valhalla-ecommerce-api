@@ -3,7 +3,8 @@ import type { Schema, Struct } from '@strapi/strapi';
 export interface EcommerceSpec extends Struct.ComponentSchema {
   collectionName: 'components_ecommerce_specs';
   info: {
-    displayName: 'Spec';
+    description: 'Par caracter\u00EDstica \u2192 valor';
+    displayName: 'Especifica\u00E7\u00E3o';
   };
   attributes: {
     key: Schema.Attribute.String;
@@ -41,6 +42,7 @@ export interface EcommerceVariant extends Struct.ComponentSchema {
 export interface InstitutionalBanner extends Struct.ComponentSchema {
   collectionName: 'components_institutional_banners';
   info: {
+    description: 'Chamada institucional com texto, bot\u00E3o e link';
     displayName: 'Banner';
   };
   attributes: {
@@ -54,7 +56,8 @@ export interface InstitutionalBanner extends Struct.ComponentSchema {
 export interface InstitutionalBenefit extends Struct.ComponentSchema {
   collectionName: 'components_institutional_benefits';
   info: {
-    displayName: 'Benefit';
+    description: 'Benef\u00EDcio ou diferencial apresentado ao cliente';
+    displayName: 'Benef\u00EDcio';
   };
   attributes: {
     description: Schema.Attribute.Text;
@@ -66,7 +69,8 @@ export interface InstitutionalBenefit extends Struct.ComponentSchema {
 export interface InstitutionalHero extends Struct.ComponentSchema {
   collectionName: 'components_institutional_heroes';
   info: {
-    displayName: 'Hero';
+    description: 'Conte\u00FAdo principal do topo da p\u00E1gina inicial';
+    displayName: 'Destaque principal';
   };
   attributes: {
     ctaLabel: Schema.Attribute.String;
@@ -85,6 +89,7 @@ export interface InstitutionalHero extends Struct.ComponentSchema {
 export interface InstitutionalLink extends Struct.ComponentSchema {
   collectionName: 'components_institutional_links';
   info: {
+    description: 'Link de navega\u00E7\u00E3o com texto e destino';
     displayName: 'Link';
   };
   attributes: {
@@ -96,7 +101,8 @@ export interface InstitutionalLink extends Struct.ComponentSchema {
 export interface InstitutionalLinkColumn extends Struct.ComponentSchema {
   collectionName: 'components_institutional_link_columns';
   info: {
-    displayName: 'Link Column';
+    description: 'Grupo de links exibido no rodap\u00E9';
+    displayName: 'Coluna de links';
   };
   attributes: {
     links: Schema.Attribute.Component<'institutional.link', true>;
@@ -107,7 +113,8 @@ export interface InstitutionalLinkColumn extends Struct.ComponentSchema {
 export interface InstitutionalStat extends Struct.ComponentSchema {
   collectionName: 'components_institutional_stats';
   info: {
-    displayName: 'Stat';
+    description: 'N\u00FAmero ou indicador exibido na se\u00E7\u00E3o Sobre';
+    displayName: 'N\u00FAmero institucional';
   };
   attributes: {
     label: Schema.Attribute.String;
@@ -118,7 +125,8 @@ export interface InstitutionalStat extends Struct.ComponentSchema {
 export interface InstitutionalStep extends Struct.ComponentSchema {
   collectionName: 'components_institutional_steps';
   info: {
-    displayName: 'Step';
+    description: 'Etapa da se\u00E7\u00E3o Como funciona';
+    displayName: 'Etapa';
   };
   attributes: {
     description: Schema.Attribute.Text;
@@ -130,7 +138,8 @@ export interface InstitutionalStep extends Struct.ComponentSchema {
 export interface InstitutionalTestimonial extends Struct.ComponentSchema {
   collectionName: 'components_institutional_testimonials';
   info: {
-    displayName: 'Testimonial';
+    description: 'Depoimento de cliente com nome e localiza\u00E7\u00E3o';
+    displayName: 'Depoimento';
   };
   attributes: {
     authorLocation: Schema.Attribute.String;
@@ -142,7 +151,8 @@ export interface InstitutionalTestimonial extends Struct.ComponentSchema {
 export interface InstitutionalTrustBadge extends Struct.ComponentSchema {
   collectionName: 'components_institutional_trust_badges';
   info: {
-    displayName: 'Trust Badge';
+    description: 'Mensagem curta de confian\u00E7a exibida no destaque principal';
+    displayName: 'Selo de confian\u00E7a';
   };
   attributes: {
     text: Schema.Attribute.String;
@@ -152,8 +162,8 @@ export interface InstitutionalTrustBadge extends Struct.ComponentSchema {
 export interface SharedSeo extends Struct.ComponentSchema {
   collectionName: 'components_shared_seos';
   info: {
-    description: '';
-    displayName: 'Seo';
+    description: 'T\u00EDtulo e descri\u00E7\u00E3o para buscadores \u2014 preenchido automaticamente se vazio';
+    displayName: 'SEO';
     icon: 'allergies';
     name: 'Seo';
   };

@@ -1,7 +1,8 @@
 {
   "collectionName": "components_institutional_links",
   "info": {
-    "displayName": "Link"
+    "displayName": "Link",
+    "description": "Link de navegação com texto e destino"
   },
   "options": {},
   "attributes": {

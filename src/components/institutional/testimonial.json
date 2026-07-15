@@ -1,7 +1,8 @@
 {
   "collectionName": "components_institutional_testimonials",
   "info": {
-    "displayName": "Testimonial"
+    "displayName": "Depoimento",
+    "description": "Depoimento de cliente com nome e localização"
   },
   "options": {},
   "attributes": {
