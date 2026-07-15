@@ -4,7 +4,8 @@
   "info": {
     "singularName": "policy",
     "pluralName": "policies",
-    "displayName": "Policy"
+    "displayName": "Política",
+    "description": "Políticas da loja (trocas, privacidade etc.)"
   },
   "options": {
     "draftAndPublish": false

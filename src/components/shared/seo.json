@@ -3,8 +3,8 @@
   "info": {
     "name": "Seo",
     "icon": "allergies",
-    "displayName": "Seo",
-    "description": ""
+    "displayName": "SEO",
+    "description": "Título e descrição para buscadores — preenchido automaticamente se vazio"
   },
   "options": {},
   "attributes": {

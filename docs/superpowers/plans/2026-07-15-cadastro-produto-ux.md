@@ -446,7 +446,7 @@ git commit -m "feat: autofill de slug, SKU e SEO via lifecycles do produto"
 **Interfaces:**
 - Produces: nomes exibidos no menu do Content Manager em PT-BR. **Não alterar** `singularName`, `pluralName` nem `collectionName` (quebraria rotas de API e banco).
 
-- [ ] **Step 1: Editar somente o bloco `info` de cada schema** (`displayName` e `description`):
+- [x] **Step 1: Editar somente o bloco `info` de cada schema** (`displayName` e `description`):
 
 | Arquivo | displayName | description |
 |---|---|---|
@@ -472,7 +472,7 @@ Exemplo (product):
 }
 ```
 
-- [ ] **Step 2: Verificar boot**
+- [x] **Step 2: Verificar boot**
 
 ```bash
 npm run develop
@@ -480,7 +480,7 @@ npm run develop
 
 Expected: menu Content Manager mostra "Produto", "Marca", "Categoria" etc.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/api src/components
