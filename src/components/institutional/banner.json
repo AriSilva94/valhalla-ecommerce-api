@@ -1,7 +1,8 @@
 {
   "collectionName": "components_institutional_banners",
   "info": {
-    "displayName": "Banner"
+    "displayName": "Banner",
+    "description": "Chamada institucional com texto, botão e link"
   },
   "options": {},
   "attributes": {

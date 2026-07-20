@@ -1,7 +1,8 @@
 {
   "collectionName": "components_institutional_link_columns",
   "info": {
-    "displayName": "Link Column"
+    "displayName": "Coluna de links",
+    "description": "Grupo de links exibido no rodapé"
   },
   "options": {},
   "attributes": {

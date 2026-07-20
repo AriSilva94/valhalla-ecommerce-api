@@ -289,9 +289,22 @@ async function seedTag() {
 }
 
 async function seedProducts(categoriesById, brandsByName, tagNovo) {
-  const map = {};
   for (const p of PRODUCTS) {
-    map[p.id] = await strapi.documents('api::product.product').create({
+    const productIsOut = p.stock === 'out';
+    const variants = p.colors.flatMap((color) =>
+      p.vars.map((variant) => ({
+        sku: `VLH-${p.id.toUpperCase()}-${slugify(color.n)}-${slugify(variant.l)}`,
+        colorName: color.n,
+        colorHex: color.hex,
+        configLabel: variant.l,
+        price: p.price + variant.d,
+        compareAtPrice: p.old ? p.old + variant.d : null,
+        // Product-level "out" overrides the individual color/config flags.
+        available: productIsOut ? false : (color.av && variant.av),
+      }))
+    );
+
+    await strapi.documents('api::product.product').create({
       status: 'published',
       data: {
         name: p.name,
@@ -302,44 +315,12 @@ async function seedProducts(categoriesById, brandsByName, tagNovo) {
         basePrice: p.price,
         variantGroupLabel: p.vl,
         specs: p.specs.map(([key, value]) => ({ key, value })),
+        variants,
         description: p.desc,
         warranty: p.w,
       },
     });
   }
-  return map;
-}
-
-async function seedProductVariants(productsById) {
-  let count = 0;
-  for (const p of PRODUCTS) {
-    const productEntry = productsById[p.id];
-    const productIsOut = p.stock === 'out';
-    for (const color of p.colors) {
-      for (const variant of p.vars) {
-        const sku = `VLH-${p.id.toUpperCase()}-${slugify(color.n)}-${slugify(variant.l)}`;
-        await strapi.documents('api::product-variant.product-variant').create({
-          status: 'published',
-          data: {
-            product: productEntry.documentId,
-            sku,
-            color: { name: color.n, hex: color.hex },
-            configLabel: variant.l,
-            price: p.price + variant.d,
-            compareAtPrice: p.old ? p.old + variant.d : null,
-            // "out of stock" at the product level overrides individual
-            // color/variant availability; otherwise each combination's
-            // availability is the AND of its own color and config flags.
-            // There is no per-variant "low stock" state yet — that's the
-            // future job of the (currently unused) stockQuantity field.
-            available: productIsOut ? false : (color.av && variant.av),
-          },
-        });
-        count += 1;
-      }
-    }
-  }
-  return count;
 }
 
 async function seedHomepage() {
@@ -368,7 +349,6 @@ async function seedEcommerce() {
     category: ['find', 'findOne'],
     tag: ['find', 'findOne'],
     product: ['find', 'findOne'],
-    'product-variant': ['find', 'findOne'],
     homepage: ['find', 'findOne'],
     'site-setting': ['find', 'findOne'],
     faq: ['find', 'findOne'],
@@ -378,8 +358,7 @@ async function seedEcommerce() {
   const categoriesById = await seedCategories();
   const brandsByName = await seedBrands();
   const tagNovo = await seedTag();
-  const productsById = await seedProducts(categoriesById, brandsByName, tagNovo);
-  const variantCount = await seedProductVariants(productsById);
+  await seedProducts(categoriesById, brandsByName, tagNovo);
   await seedHomepage();
   await seedSiteSettings();
   await seedFaqs();
@@ -387,7 +366,7 @@ async function seedEcommerce() {
 
   console.log(
     `Seeded ${CATEGORIES.length} categories, ${BRANDS.length} brands, 1 tag, ` +
-    `${PRODUCTS.length} products, ${variantCount} product variants, homepage, ` +
+    `${PRODUCTS.length} products with inline variants, homepage, ` +
     `site settings, ${FAQS.length} FAQs, ${POLICIES.length} policies.`
   );
 }

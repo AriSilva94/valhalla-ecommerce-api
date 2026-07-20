@@ -1,7 +1,8 @@
 {
   "collectionName": "components_ecommerce_specs",
   "info": {
-    "displayName": "Spec"
+    "displayName": "Especificação",
+    "description": "Par característica → valor"
   },
   "options": {},
   "attributes": {

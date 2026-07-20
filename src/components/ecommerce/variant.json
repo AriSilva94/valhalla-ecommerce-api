@@ -1,0 +1,47 @@
+{
+  "collectionName": "components_ecommerce_variants",
+  "info": {
+    "displayName": "Variação",
+    "description": "Variação de produto (cor/configuração) com preço próprio"
+  },
+  "options": {},
+  "attributes": {
+    "sku": {
+      "type": "string"
+    },
+    "colorName": {
+      "type": "string"
+    },
+    "colorHex": {
+      "type": "customField",
+      "customField": "plugin::color-picker.color",
+      "options": {
+        "format": "hex"
+      }
+    },
+    "configLabel": {
+      "type": "string"
+    },
+    "price": {
+      "type": "decimal",
+      "required": true
+    },
+    "compareAtPrice": {
+      "type": "decimal"
+    },
+    "available": {
+      "type": "boolean",
+      "default": true,
+      "required": true
+    },
+    "stockQuantity": {
+      "type": "integer"
+    },
+    "image": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": ["images"]
+    }
+  }
+}

@@ -12,11 +12,13 @@
     "seed:example": "node ./scripts/seed.js",
     "start": "strapi start",
     "strapi": "strapi",
+    "test": "vitest run",
     "upgrade": "npx @strapi/upgrade latest",
     "upgrade:dry": "npx @strapi/upgrade latest --dry"
   },
   "dependencies": {
     "@strapi/plugin-cloud": "5.50.1",
+    "@strapi/plugin-color-picker": "^5.50.2",
     "@strapi/plugin-users-permissions": "5.50.1",
     "@strapi/strapi": "5.50.1",
     "better-sqlite3": "^12.11.1",
@@ -32,7 +34,8 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   },
   "engines": {
     "node": ">=20.0.0 <=26.x.x",
