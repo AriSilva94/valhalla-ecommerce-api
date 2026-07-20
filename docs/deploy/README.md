@@ -26,4 +26,5 @@
 2. O Postgres precisa de **volume persistente** (managed database do Dokploy **ou** volume nomeado no compose).
 3. Deploy do Strapi **não toca** no volume do Postgres → dados sobrevivem.
 4. Cuidado à parte: **mudança destrutiva de schema** (remover content-type/campo) apaga *aquele* dado específico mesmo com banco persistente — ver [persistencia-banco.md](persistencia-banco.md#atenção-mudanças-de-schema-também-apagam-dados).
-5. Antes de todo deploy, rode a [checklist](persistencia-banco.md#checklist-antes-de-todo-deploy).
+5. **Backup diário para o Cloudflare R2** já está ligado no Dokploy — é a rede de segurança. **Mas só vale se apontar pro Postgres que o app usa** (não pode ser SQLite efêmero, senão é backup de nada). Ver [persistencia-banco.md](persistencia-banco.md#51-backup-cloudflare-r2--já-configurado).
+6. Antes de todo deploy, rode a [checklist](persistencia-banco.md#checklist-antes-de-todo-deploy).

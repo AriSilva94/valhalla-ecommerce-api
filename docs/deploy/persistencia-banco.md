@@ -149,6 +149,30 @@ content-type** apaga *aquele* dado mesmo com Postgres persistente:
 
 ---
 
+## 5.1. Backup (Cloudflare R2) — já configurado
+
+O Dokploy está configurado para **backup diário do Postgres para o Cloudflare R2**.
+Isso é ótimo — mas **backup e persistência são coisas diferentes** e ambos precisam
+estar certos:
+
+- **Persistência (volume)** evita perder dados **no dia a dia / a cada deploy**.
+- **Backup (R2)** é a **rede de segurança** para restaurar após um acidente
+  (schema destrutivo, exclusão errada, corrupção).
+
+### ⚠️ Um backup só vale se salvar o banco CERTO
+O backup diário precisa apontar para o **mesmo Postgres em que o Strapi grava**.
+Se o app estiver caindo em **SQLite efêmero** (causa do incidente), o Dokploy pode
+estar **backupeando um Postgres vazio/separado** — ou seja, **backup de nada**.
+
+**Confirme:**
+1. `DATABASE_CLIENT=postgres` no Environment do Strapi, apontando para o Postgres gerenciado.
+2. Esse **mesmo** Postgres é o que tem o backup diário para o R2 ligado.
+3. O último dump **não está vazio** (baixe/inspecione tamanho; um dump de KB ≈ vazio).
+
+### Frequência
+- 1x/dia cobre a maioria dos casos, mas você **perde até ~24h** de alterações.
+- Antes de deploy com **mudança de schema**, faça um **backup manual** (não espere o diário).
+
 ## 6. Como verificar que a persistência está OK
 
 Depois de configurar, confirme:
@@ -170,7 +194,8 @@ Depois de configurar, confirme:
 
 - [ ] `DATABASE_CLIENT=postgres` está setado no Environment do Dokploy (ou é Compose com Postgres).
 - [ ] O Postgres é gerenciado/volume persistente (não é SQLite, não é Postgres sem volume).
-- [ ] Se o deploy mexe em **schema** (content-types/components): **backup do banco feito**.
+- [ ] Se o deploy mexe em **schema** (content-types/components): **backup manual feito** (não confie só no backup diário do R2 — você perderia até ~24h).
+- [ ] O **backup diário do R2** aponta para o **mesmo** Postgres do app e o último dump **não está vazio**.
 - [ ] `package-lock.json` gerado com **npm 10** (o `node:20-alpine` usa npm 10; lock de npm 11+ quebra `npm ci`). Ver histórico do projeto.
 - [ ] Após deploy: dado de teste anterior **continua presente** (validação da persistência).
 

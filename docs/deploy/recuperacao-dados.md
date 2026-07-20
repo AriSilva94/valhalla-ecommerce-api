@@ -20,6 +20,24 @@ curl -s "https://api-valhallatecnologia-dev.arisilva.tech/api/products?paginatio
 # total:0  -> vazio, precisa recuperar
 ```
 
+## Opção 0 — Restaurar o backup do Cloudflare R2 (PREFERIDA)
+
+O Dokploy está configurado para **backup diário do Postgres para o Cloudflare R2**.
+Se os dados zerarem, **o backup mais recente é a melhor fonte** (dados reais, não só o seed base).
+
+1. Dokploy → serviço do **Postgres** → aba **Backups**.
+2. Localize o backup **anterior ao incidente** (o backup roda 1x/dia — confira a data/hora para não restaurar um dump já vazio).
+3. **Restore** para o banco do dev.
+4. Redeploy do Strapi e valide (`/api/products?...withCount`).
+
+> ⚠️ **O backup só vale se estiver salvando o banco CERTO.** Confirme que:
+> - o app (Strapi) grava no **mesmo** Postgres que o Dokploy backupeia
+>   (`DATABASE_CLIENT=postgres` + host apontando pra esse banco — ver
+>   [persistencia-banco.md](persistencia-banco.md));
+> - o dump **não está vazio** (se o app estava em SQLite efêmero, o backup pode
+>   estar salvando um Postgres vazio — nesse caso o backup é inútil e é preciso
+>   corrigir a persistência primeiro, depois cair na Opção 1/2).
+
 ## Opção 1 — Re-seed in-process (dentro do container do dev)
 
 Melhor caminho: roda o `seed.js` com o mesmo `env` do dev (conecta no Postgres do dev).
