@@ -33,6 +33,12 @@
     "secondaryCtaLink": {
       "type": "string"
     },
+    "image": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": ["images"]
+    },
     "trustBadges": {
       "type": "component",
       "repeatable": true,

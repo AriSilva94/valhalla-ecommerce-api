@@ -79,6 +79,7 @@ export interface InstitutionalHero extends Struct.ComponentSchema {
     headline: Schema.Attribute.String;
     headlineAccent: Schema.Attribute.String;
     headlineHighlight: Schema.Attribute.String;
+    image: Schema.Attribute.Media<'images'>;
     secondaryCtaLabel: Schema.Attribute.String;
     secondaryCtaLink: Schema.Attribute.String;
     subtext: Schema.Attribute.Text;
