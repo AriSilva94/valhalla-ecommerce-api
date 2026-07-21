@@ -264,7 +264,7 @@ Depois de configurar, confirme:
 - [ ] O Postgres é gerenciado/volume persistente (não é SQLite, não é Postgres sem volume).
 - [ ] Se o deploy mexe em **schema** (content-types/components): **backup manual feito** (não confie só no backup diário do R2 — você perderia até ~24h).
 - [ ] O **backup diário do R2** aponta para o **mesmo** Postgres do app e o último dump **não está vazio**.
-- [ ] `package-lock.json` gerado com **npm 10** (o `node:20-alpine` usa npm 10; lock de npm 11+ quebra `npm ci`). Ver histórico do projeto.
+- [ ] `package-lock.json` gerado com o **mesmo npm que o `Dockerfile` fixa** (hoje `npm@11.6.2`, pinado nos dois estágios). Ao subir o npm local, suba o pin junto — divergência entre os dois já quebrou o build.
 - [ ] Após deploy: dado de teste anterior **continua presente** (validação da persistência).
 
 ---
