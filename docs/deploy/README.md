@@ -7,11 +7,20 @@
 > e os dados sumirem, a configuração está **errada** — pare e corrija a persistência
 > antes de qualquer coisa. Não é normal "arrumar os dados a cada deploy".
 
+## Status: ✅ resolvido em 2026-07-21
+
+O dev **não** estava em Postgres — estava em SQLite dentro do container, por falta da
+variável `DATABASE_CLIENT`. Por isso zerava a cada deploy. Hoje roda num **Postgres
+gerenciado do Dokploy** (`valhalla-postgres`), validado com teste de redeploy.
+Detalhes e armadilhas: [persistencia-banco.md](persistencia-banco.md#31-o-que-foi-aplicado-de-fato--armadilhas-encontradas).
+
 ## Contexto
 
 - App: **Strapi 5** (`valhalla-ecommerce-api`), deploy no **Dokploy** pelo branch `develop`.
+  Serviço tipo **Application (Dockerfile)** → o `docker-compose.yml` do repo é **ignorado**.
 - Local (dev na máquina): banco **SQLite** (`.tmp/data.db`) — efêmero por natureza, tudo bem.
-- Ambiente dev (Dokploy): deve usar **PostgreSQL com volume persistente**.
+  É a **fonte da verdade** do catálogo.
+- Ambiente dev (Dokploy): **PostgreSQL gerenciado**, serviço separado com volume próprio.
 
 ## Índice
 

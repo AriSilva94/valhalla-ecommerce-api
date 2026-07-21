@@ -3,6 +3,14 @@
 > **Objetivo:** garantir que o banco do ambiente **dev** (Postgres, no Dokploy)
 > **nunca** seja resetado por um deploy. Deploy = código novo, dados intactos.
 
+> ## ✅ RESOLVIDO em 2026-07-21
+> A causa descrita abaixo foi **confirmada** e corrigida. O dev agora usa um
+> **Postgres gerenciado do Dokploy** (serviço `valhalla-postgres`, host interno
+> `valhalla-tecnologia-valhallapostgres-x8qdw9`, database `db-valhalla-ecommerce-dev`).
+> **Validado:** conta de admin criada, redeploy feito, conta sobreviveu.
+> Ver [seção 3.1](#31-o-que-foi-aplicado-de-fato--armadilhas-encontradas) para as
+> armadilhas encontradas no caminho.
+
 ---
 
 ## 1. O que aconteceu (o incidente)
@@ -85,6 +93,66 @@ Dokploy (que já nasce com volume persistente e suporte a backup).
 - Menos mudança no que já existe (segue Application/Dockerfile).
 - Backup gerenciado pelo Dokploy.
 - Banco isolado do ciclo de deploy da aplicação.
+
+---
+
+## 3.1. O que foi aplicado de fato + armadilhas encontradas
+
+Foi seguida a **Opção A**. Cinco erros apareceram no caminho — todos com sintomas
+enganosos. Registrados aqui para não custarem tempo de novo.
+
+### 1. `DATABASE_CLIENT` ausente (a causa raiz)
+O `.env.dokploy` tinha `DATABASE_NAME`, `DATABASE_USERNAME` e `DATABASE_PASSWORD`,
+mas **não tinha `DATABASE_CLIENT` nem `DATABASE_HOST`**. Sem `DATABASE_CLIENT`, o
+Strapi ignora as outras três e usa SQLite. É como ter a chave sem o carro.
+Aquelas 3 variáveis só funcionam via `docker-compose.yml` — que o modo
+Application **ignora**.
+
+### 2. Campo Docker Image com `16` em vez de `postgres:16-alpine`
+```
+Error response from daemon: pull access denied for 16, repository does not exist
+```
+O Dokploy pede a **imagem completa**, não só a versão. O banco nunca subiu.
+
+### 3. `ENOTFOUND` no host do Postgres
+```
+error: getaddrinfo ENOTFOUND valhalla-tecnologia-valhallapostgres-x8qdw9
+```
+Sintoma de rede, causa era o erro 2 — o container do banco não existia, logo não
+havia hostname para resolver. **Antes de investigar rede, confirme que o serviço
+do banco está `running`.**
+
+### 4. `NODE_ENV=development` no Environment
+Quebra o boot. O `Dockerfile` roda `npm ci` com `NODE_ENV=production`, então
+`typescript` (devDependency) **não está na imagem**; em modo development o Strapi
+tenta compilar TS e morre. Bônus: modo development libera o Content-Type Builder,
+que grava schema em runtime — mais um vetor de perda de dados.
+**Não declare `NODE_ENV` no Dokploy.** O `Dockerfile` já resolve.
+
+### 5. Nome do banco sem o sufixo do Dokploy
+```
+error: database "db-valhalla-ecommerce" does not exist
+```
+O Dokploy criou como `db-valhalla-ecommerce-dev`. **Sempre copie o Database Name
+da tela de credenciais do serviço**, não presuma.
+
+> Esse erro é bom sinal: significa que host, porta, usuário e senha **já estão
+> corretos** — o Postgres respondeu e autenticou.
+
+### Também necessário: `IS_PROXIED=true`
+`config/server.ts` lê `proxy: env.bool('IS_PROXIED', false)`. O Dokploy/Traefik
+termina o TLS, então sem essa flag o login do admin tem problema de cookie/redirect.
+
+### Ordem de leitura do log quando dá Bad Gateway
+502 = container caiu. O log de runtime (aba **Logs**, não Deployments) diz o motivo:
+
+| Log | Causa |
+|---|---|
+| `Cannot find module 'typescript'` | `NODE_ENV=development` |
+| `getaddrinfo ENOTFOUND` | banco não está rodando, ou host errado |
+| `ECONNREFUSED` | porta errada / banco não pronto |
+| `password authentication failed` | senha diverge |
+| `database "..." does not exist` | nome do banco diverge (resto está certo) |
 
 ---
 
