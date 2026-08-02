@@ -17,6 +17,16 @@ describe('media CDN rewrite', () => {
     ).toBe('https://cdn.valhallatecnologia.com.br/assets/images/Fontes_Fonte.webp');
   });
 
+  it('collapses repeated root paths created by an env public URL that includes the path', () => {
+    expect(
+      rewriteMediaUrl(
+        'https://cdn-dev.valhallatecnologia.com.br/assets/images/assets/images/Fontes_Fonte.webp',
+        'https://cdn-dev.valhallatecnologia.com.br/assets/images',
+        'assets/images'
+      )
+    ).toBe('https://cdn-dev.valhallatecnologia.com.br/assets/images/Fontes_Fonte.webp');
+  });
+
   it('rewrites nested format URLs while leaving unrelated values unchanged', () => {
     const result = rewriteMediaFileRecord(
       {
