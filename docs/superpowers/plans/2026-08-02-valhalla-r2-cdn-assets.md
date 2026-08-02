@@ -13,7 +13,7 @@
 ## File Structure
 
 - Create `scripts/r2-copy-prefix.js`: copies existing objects from one R2 prefix to another, with dry-run support and env-file loading.
-- Create `scripts/rewrite-media-urls.js`: rewrites Strapi upload file URLs through the REST API using an API token, dry-run by default unless `--yes` is passed.
+- Create `scripts/rewrite-media-urls.js`: rewrites Strapi upload file URLs directly in the database, dry-run by default unless `--yes` is passed.
 - Create `scripts/validate-media-cdn.js`: validates content counts and sampled image URLs for DEV and PROD.
 - Modify `package.json`: add script aliases for dry-run and execution.
 - Modify `.env.example`: document the new CDN env model.
@@ -84,11 +84,11 @@ Expected: PASS for the inline helper behavior. This is a design lock before copy
 Create a CommonJS script that:
 
 1. Loads `--env-file` if provided.
-2. Requires `STRAPI_URL`, `STRAPI_TOKEN`, and `TARGET_CDN_URL`.
-3. Fetches `/api/upload/files?pagination[pageSize]=100`.
+2. Requires `TARGET_CDN_URL`.
+3. Uses SQLite locally or Postgres when `DATABASE_CLIENT=postgres`.
 4. Rewrites `url` and nested `formats.*.url`.
 5. Logs changes in dry-run mode.
-6. Sends `PUT /api/upload/files/:id` only when `--yes` is present.
+6. Updates the `files` table only when `--yes` is present.
 
 - [ ] **Step 4: Run script help/dry-run path**
 
@@ -98,7 +98,7 @@ Run:
 node scripts/rewrite-media-urls.js --dry-run
 ```
 
-Expected: exits with a clear missing env error mentioning `STRAPI_URL`, `STRAPI_TOKEN`, and `TARGET_CDN_URL`.
+Expected: exits with a clear missing env error mentioning `TARGET_CDN_URL`.
 
 ## Task 2: R2 Prefix Copy Script
 
@@ -211,26 +211,22 @@ Expected: copies all legacy uploaded objects to `assets/images`.
 
 - [ ] **Step 3: Rewrite DEV media records**
 
-Run with a full-access API token from DEV:
+Run inside the DEV Strapi/Dokploy network, where the DEV Postgres host is reachable:
 
 ```bash
-$env:STRAPI_URL='https://api-dev.valhallatecnologia.com.br'
-$env:STRAPI_TOKEN='<DEV_API_TOKEN>'
 $env:TARGET_CDN_URL='https://cdn-dev.valhallatecnologia.com.br'
-npm run media:rewrite-urls -- --yes
+npm run media:rewrite-urls -- --env-file .env.dokploy.dev --yes
 ```
 
 Expected: all changed upload file records are updated to `cdn-dev`.
 
 - [ ] **Step 4: Rewrite PROD media records**
 
-Run with a full-access API token from PROD:
+Run inside the PROD Strapi/Dokploy network, where the PROD Postgres host is reachable:
 
 ```bash
-$env:STRAPI_URL='https://api.valhallatecnologia.com.br'
-$env:STRAPI_TOKEN='<PROD_API_TOKEN>'
 $env:TARGET_CDN_URL='https://cdn.valhallatecnologia.com.br'
-npm run media:rewrite-urls -- --yes
+npm run media:rewrite-urls -- --env-file .env.dokploy.prod --yes
 ```
 
 Expected: all changed upload file records are updated to `cdn`.
@@ -249,5 +245,5 @@ Expected: counts print, sample image URLs start with the expected CDN, and sampl
 ## Self-Review
 
 - Spec coverage: env model, object copy, media record rewrite, no deletion, and validation are covered.
-- Placeholder scan: only `<DEV_API_TOKEN>` and `<PROD_API_TOKEN>` remain as explicit runtime secrets that must be supplied by the operator; they are not code placeholders.
+- Placeholder scan: no code placeholders remain; runtime secrets are read from env files or process env.
 - Type consistency: script names and package aliases are consistent across tasks.
