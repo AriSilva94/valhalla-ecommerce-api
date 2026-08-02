@@ -21,8 +21,24 @@ function trimSlashes(value: string): string {
   return value.replace(/^\/+/, '').replace(/\/+$/, '');
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizePublicUrl(publicUrl: string, rootPath: string): string {
+  const root = trimSlashes(rootPath);
+  let normalized = publicUrl.replace(/\/+$/, '');
+  const rootSuffix = `/${root}`;
+
+  while (normalized.endsWith(rootSuffix)) {
+    normalized = normalized.slice(0, -rootSuffix.length).replace(/\/+$/, '');
+  }
+
+  return normalized;
+}
+
 function buildTargetPrefix(publicUrl: string, rootPath = 'assets/images'): string {
-  return `${publicUrl.replace(/\/+$/, '')}/${trimSlashes(rootPath)}/`;
+  return `${normalizePublicUrl(publicUrl, rootPath)}/${trimSlashes(rootPath)}/`;
 }
 
 export function rewriteMediaUrl(
@@ -32,12 +48,14 @@ export function rewriteMediaUrl(
 ): unknown {
   if (typeof url !== 'string') return url;
 
+  const root = trimSlashes(rootPath);
   const targetPrefix = buildTargetPrefix(publicUrl, rootPath);
+  const repeatedRoot = `(?:${escapeRegex(root)}/)+`;
   const patterns = [
     /^https:\/\/pub-[^/]+\.r2\.dev\/uploads-dev\//,
     /^https:\/\/pub-[^/]+\.r2\.dev\/uploads\//,
     ...KNOWN_CDN_HOSTS.map(
-      (host) => new RegExp(`^https://${host.replace(/\./g, '\\.')}/${trimSlashes(rootPath)}/`)
+      (host) => new RegExp(`^https://${escapeRegex(host)}/${repeatedRoot}`)
     ),
   ];
 
