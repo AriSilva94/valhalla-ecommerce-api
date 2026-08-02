@@ -1,6 +1,7 @@
 import type { Core } from '@strapi/strapi';
 
 import { seedAdminViews } from './utils/admin-view-seed';
+import { rewriteStrapiMediaFiles } from './utils/media-cdn-rewrite';
 import { registerProductAutofill } from './utils/product-autofill-middleware';
 
 // Content types the frontend reads without auth. Grant these to the Public role
@@ -22,6 +23,17 @@ export default {
   },
 
   async bootstrap({ strapi }: { strapi: Core.Strapi }) {
+    const mediaRewrite = await rewriteStrapiMediaFiles(strapi, {
+      publicUrl: process.env.R2_PUBLIC_URL || '',
+      rootPath: process.env.R2_ROOT_PATH || 'assets/images',
+    });
+
+    if (mediaRewrite.updated > 0) {
+      strapi.log.info(
+        `Rewrote ${mediaRewrite.updated}/${mediaRewrite.files} media URLs to ${process.env.R2_PUBLIC_URL}`
+      );
+    }
+
     const publicRole = await strapi.db
       .query('plugin::users-permissions.role')
       .findOne({ where: { type: 'public' } });
