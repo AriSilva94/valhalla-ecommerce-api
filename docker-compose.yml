@@ -23,6 +23,13 @@ services:
       DATABASE_USERNAME: ${DATABASE_USERNAME:-strapi}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD}
       DATABASE_SSL: "false"
+      # --- Cloudflare R2 media storage ---
+      R2_BUCKET: ${R2_BUCKET:?set R2_BUCKET}
+      R2_ENDPOINT: ${R2_ENDPOINT:?set R2_ENDPOINT}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:?set R2_PUBLIC_URL}
+      R2_ROOT_PATH: ${R2_ROOT_PATH:-assets/images}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?set R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?set R2_SECRET_ACCESS_KEY}
       # --- Strapi secrets (generate: openssl rand -base64 32) ---
       APP_KEYS: ${APP_KEYS:?set APP_KEYS}
       API_TOKEN_SALT: ${API_TOKEN_SALT:?set API_TOKEN_SALT}
