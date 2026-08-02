@@ -1,7 +1,8 @@
 {
   "collectionName": "components_institutional_stats",
   "info": {
-    "displayName": "Stat"
+    "displayName": "Número institucional",
+    "description": "Número ou indicador exibido na seção Sobre"
   },
   "options": {},
   "attributes": {

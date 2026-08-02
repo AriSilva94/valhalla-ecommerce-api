@@ -1,7 +1,8 @@
 {
   "collectionName": "components_institutional_benefits",
   "info": {
-    "displayName": "Benefit"
+    "displayName": "Benefício",
+    "description": "Benefício ou diferencial apresentado ao cliente"
   },
   "options": {},
   "attributes": {

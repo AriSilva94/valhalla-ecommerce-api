@@ -122,6 +122,8 @@ coverage
 ############################
 
 .env
+.env.*
+!.env.example
 license.txt
 exports
 .strapi
@@ -129,3 +131,5 @@ dist
 build
 .strapi-updater.json
 .strapi-cloud.json
+# Fotos originais do cliente (192 arquivos) - importadas via npm run import:media
+docs/fotos/

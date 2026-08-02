@@ -1,7 +1,8 @@
 {
   "collectionName": "components_institutional_trust_badges",
   "info": {
-    "displayName": "Trust Badge"
+    "displayName": "Selo de confiança",
+    "description": "Mensagem curta de confiança exibida no destaque principal"
   },
   "options": {},
   "attributes": {

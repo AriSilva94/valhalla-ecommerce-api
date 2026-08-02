@@ -4,7 +4,8 @@
   "info": {
     "singularName": "brand",
     "pluralName": "brands",
-    "displayName": "Brand"
+    "displayName": "Marca",
+    "description": "Marcas dos produtos"
   },
   "options": {
     "draftAndPublish": false

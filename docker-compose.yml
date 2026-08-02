@@ -1,0 +1,58 @@
+# Dokploy Compose deploy — Strapi + Postgres
+# Set the variables below in the Dokploy "Environment" tab.
+# Attach a domain in Dokploy to the "strapi" service on port 1337.
+
+services:
+  strapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 1337
+      # Public URL + proxy (Dokploy/Traefik terminates TLS)
+      PUBLIC_URL: ${PUBLIC_URL:?set PUBLIC_URL}
+      IS_PROXIED: "true"
+      # --- Postgres ---
+      DATABASE_CLIENT: postgres
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${DATABASE_NAME:-strapi}
+      DATABASE_USERNAME: ${DATABASE_USERNAME:-strapi}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD}
+      DATABASE_SSL: "false"
+      # --- Strapi secrets (generate: openssl rand -base64 32) ---
+      APP_KEYS: ${APP_KEYS:?set APP_KEYS}
+      API_TOKEN_SALT: ${API_TOKEN_SALT:?set API_TOKEN_SALT}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET:?set ADMIN_JWT_SECRET}
+      TRANSFER_TOKEN_SALT: ${TRANSFER_TOKEN_SALT:?set TRANSFER_TOKEN_SALT}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
+    volumes:
+      - strapi-uploads:/opt/app/public/uploads
+    expose:
+      - "1337"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:-strapi}
+      POSTGRES_USER: ${DATABASE_USERNAME:-strapi}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME:-strapi} -d ${DATABASE_NAME:-strapi}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  strapi-uploads:
+  postgres-data:

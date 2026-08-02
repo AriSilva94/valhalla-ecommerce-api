@@ -4,7 +4,8 @@
   "info": {
     "singularName": "product",
     "pluralName": "products",
-    "displayName": "Product"
+    "displayName": "Produto",
+    "description": "Produtos da loja, com variações, imagens e preços"
   },
   "options": {
     "draftAndPublish": true
@@ -73,10 +74,11 @@
       "component": "shared.seo"
     },
     "variants": {
-      "type": "relation",
-      "relation": "oneToMany",
-      "target": "api::product-variant.product-variant",
-      "mappedBy": "product"
+      "type": "component",
+      "repeatable": true,
+      "component": "ecommerce.variant",
+      "required": true,
+      "min": 1
     }
   }
 }

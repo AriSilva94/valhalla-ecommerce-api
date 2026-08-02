@@ -4,7 +4,8 @@
   "info": {
     "singularName": "site-setting",
     "pluralName": "site-settings",
-    "displayName": "Site Settings"
+    "displayName": "Configurações do Site",
+    "description": "WhatsApp, rodapé, contato e textos institucionais"
   },
   "options": {
     "draftAndPublish": false

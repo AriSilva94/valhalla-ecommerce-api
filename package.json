@@ -9,16 +9,20 @@
     "deploy": "strapi deploy",
     "dev": "strapi develop",
     "develop": "strapi develop",
+    "import:media": "node ./scripts/import-media.js",
     "seed:example": "node ./scripts/seed.js",
     "start": "strapi start",
     "strapi": "strapi",
+    "test": "vitest run",
     "upgrade": "npx @strapi/upgrade latest",
     "upgrade:dry": "npx @strapi/upgrade latest --dry"
   },
   "dependencies": {
-    "@strapi/plugin-cloud": "5.50.1",
-    "@strapi/plugin-users-permissions": "5.50.1",
-    "@strapi/strapi": "5.50.1",
+    "@strapi/plugin-cloud": "5.50.2",
+    "@strapi/plugin-color-picker": "^5.50.2",
+    "@strapi/plugin-users-permissions": "5.50.2",
+    "@strapi/provider-upload-aws-s3": "^5.50.2",
+    "@strapi/strapi": "5.50.2",
     "better-sqlite3": "^12.11.1",
     "fs-extra": "^10.0.0",
     "mime-types": "^2.1.27",
@@ -28,15 +32,20 @@
     "react-router-dom": "^6.0.0",
     "styled-components": "^6.0.0"
   },
+  "overrides": {
+    "tar": "^7.5.20",
+    "ws": "^8.21.1"
+  },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   },
   "engines": {
     "node": ">=20.0.0 <=26.x.x",
-    "npm": ">=6.0.0"
+    "npm": ">=11.0.0"
   },
   "strapi": {
     "uuid": "75392575-1bbb-49d2-861e-1cc87466e235",
