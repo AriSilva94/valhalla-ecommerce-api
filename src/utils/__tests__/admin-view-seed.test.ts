@@ -214,8 +214,30 @@ function makeHarness(keys: string[] = Object.keys(PATCH_FIELDS)) {
   };
 }
 
+const PRODUCT_EDIT_LAYOUT_V4 = [
+  [
+    { name: "name", size: 6 },
+    { name: "slug", size: 6 },
+  ],
+  [
+    { name: "mainImage", size: 6 },
+    { name: "gallery", size: 6 },
+  ],
+  [{ name: "variantGroupLabel", size: 6 }],
+  [{ name: "variants", size: 12 }],
+  [{ name: "description", size: 12 }],
+  [{ name: "specs", size: 12 }],
+  [{ name: "warranty", size: 6 }],
+  [
+    { name: "brand", size: 6 },
+    { name: "category", size: 6 },
+  ],
+  [{ name: "tags", size: 12 }],
+  [{ name: "seo", size: 12 }],
+];
+
 describe("seedAdminViews", () => {
-  it("aplica labels, ajuda, settings, lista e oculta o slug do produto", async () => {
+  it("aplica labels, ajuda, settings, lista, expõe o slug e oculta o basePrice", async () => {
     const harness = makeHarness();
     const productKey = `${CONTENT_TYPE_PREFIX}api::product.product`;
 
@@ -231,36 +253,9 @@ describe("seedAdminViews", () => {
     });
     expect(product.metadatas.name.edit.label).toBe("Nome do produto");
     expect(product.metadatas.name.list.label).toBe("Nome do produto");
-    expect(product.metadatas.basePrice.edit.description).toBe(
-      "Usado como referência; o preço real vem de cada variação",
-    );
-    expect(product.layouts.list).toEqual([
-      "mainImage",
-      "name",
-      "basePrice",
-      "category",
-    ]);
-    expect(product.layouts.edit).toEqual([
-      [
-        { name: "name", size: 6 },
-        { name: "basePrice", size: 6 },
-      ],
-      [
-        { name: "mainImage", size: 6 },
-        { name: "gallery", size: 6 },
-      ],
-      [{ name: "variantGroupLabel", size: 6 }],
-      [{ name: "variants", size: 12 }],
-      [{ name: "description", size: 12 }],
-      [{ name: "specs", size: 12 }],
-      [{ name: "warranty", size: 6 }],
-      [
-        { name: "brand", size: 6 },
-        { name: "category", size: 6 },
-      ],
-      [{ name: "tags", size: 12 }],
-      [{ name: "seo", size: 12 }],
-    ]);
+    expect(product.metadatas.slug.edit.label).toBe("Endereço (URL)");
+    expect(product.layouts.list).toEqual(["mainImage", "name", "category"]);
+    expect(product.layouts.edit).toEqual(PRODUCT_EDIT_LAYOUT_V4);
   });
 
   it("não faz nada quando o marker já está na versão atual", async () => {
@@ -268,7 +263,7 @@ describe("seedAdminViews", () => {
     harness.rows.set(MARKER_KEY, {
       id: 99,
       key: MARKER_KEY,
-      value: JSON.stringify(2),
+      value: JSON.stringify(4),
       type: "number",
       environment: "",
       tag: "",
@@ -302,11 +297,11 @@ describe("seedAdminViews", () => {
       harness.config(`${CONTENT_TYPE_PREFIX}api::product.product`).metadatas
         .name.edit.label,
     ).toBe("Nome do produto");
-    expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(2));
+    expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(4));
     expect(harness.coreStore.create).not.toHaveBeenCalled();
   });
 
-  it("migra v1 para v2 sem sobrescrever customizações dos patches antigos", async () => {
+  it("migra v1 para v4 sem sobrescrever customizações dos patches antigos", async () => {
     const harness = makeHarness();
     const productKey = `${CONTENT_TYPE_PREFIX}api::product.product`;
     const variantKey = `${COMPONENT_PREFIX}ecommerce.variant`;
@@ -356,27 +351,9 @@ describe("seedAdminViews", () => {
     expect(harness.config(homepageKey).metadatas.hero.edit.label).toBe(
       "Destaque principal",
     );
-    expect(harness.config(productKey).layouts.edit).toEqual([
-      [
-        { name: "name", size: 6 },
-        { name: "basePrice", size: 6 },
-      ],
-      [
-        { name: "mainImage", size: 6 },
-        { name: "gallery", size: 6 },
-      ],
-      [{ name: "variantGroupLabel", size: 6 }],
-      [{ name: "variants", size: 12 }],
-      [{ name: "description", size: 12 }],
-      [{ name: "specs", size: 12 }],
-      [{ name: "warranty", size: 6 }],
-      [
-        { name: "brand", size: 6 },
-        { name: "category", size: 6 },
-      ],
-      [{ name: "tags", size: 12 }],
-      [{ name: "seo", size: 12 }],
-    ]);
+    expect(harness.config(productKey).layouts.edit).toEqual(
+      PRODUCT_EDIT_LAYOUT_V4,
+    );
     const expectedUpdatedIds = [
       productKey,
       homepageKey,
@@ -402,7 +379,76 @@ describe("seedAdminViews", () => {
     expect(updatedIds.sort((left, right) => left - right)).toEqual(
       expectedUpdatedIds.sort((left, right) => left - right),
     );
-    expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(2));
+    expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(4));
+  });
+
+  // v4 exists because the client edited "Preço base" expecting the storefront to
+  // follow it. The field is now derived from the variants, so it leaves the
+  // admin form and the list, and the slug takes its place so a renamed product
+  // can have its URL corrected.
+  it("migra v2 para v4 mexendo somente na view de produto", async () => {
+    const harness = makeHarness();
+    const productKey = `${CONTENT_TYPE_PREFIX}api::product.product`;
+    const product = harness.config(productKey);
+
+    product.metadatas.name.edit.label = "Nome personalizado";
+    product.layouts.list = ["mainImage", "name", "basePrice", "category"];
+    harness.rows.get(productKey)!.value = JSON.stringify(product);
+    harness.rows.set(MARKER_KEY, {
+      id: 99,
+      key: MARKER_KEY,
+      value: JSON.stringify(2),
+      type: "number",
+      environment: "",
+      tag: "",
+    });
+
+    await seedAdminViews(harness.strapi);
+
+    const migrated = harness.config(productKey);
+    expect(migrated.metadatas.name.edit.label).toBe("Nome personalizado");
+    expect(migrated.layouts.list).toEqual(["mainImage", "name", "category"]);
+    expect(migrated.layouts.edit).toEqual(PRODUCT_EDIT_LAYOUT_V4);
+    expect(migrated.metadatas.slug.edit.label).toBe("Endereço (URL)");
+    expect(migrated.metadatas.basePrice.edit.description).toBe(
+      "Calculado com o menor preço entre as variações. Para mudar o preço, edite a variação",
+    );
+
+    const updatedIds = harness.coreStore.update.mock.calls.map(
+      ([
+        {
+          where: { id },
+        },
+      ]) => id,
+    );
+    expect(updatedIds.sort((left, right) => left - right)).toEqual([
+      harness.rows.get(productKey)!.id,
+      99,
+    ]);
+    expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(4));
+  });
+
+  // A marker with value 3 was found in a live database even though no released
+  // version ever wrote one, so 3 was skipped: an install stuck there must still
+  // receive the product view upgrade.
+  it("migra o marker órfão v3 para v4", async () => {
+    const harness = makeHarness();
+    const productKey = `${CONTENT_TYPE_PREFIX}api::product.product`;
+    harness.rows.set(MARKER_KEY, {
+      id: 99,
+      key: MARKER_KEY,
+      value: JSON.stringify(3),
+      type: "number",
+      environment: "",
+      tag: "",
+    });
+
+    await seedAdminViews(harness.strapi);
+
+    expect(harness.config(productKey).layouts.edit).toEqual(
+      PRODUCT_EDIT_LAYOUT_V4,
+    );
+    expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(4));
   });
 
   it("avisa sobre cada config ausente e não altera nenhuma config nem grava marker", async () => {
@@ -613,7 +659,6 @@ describe("seedAdminViews", () => {
     ).toBe("Use uma rota do site (ex.: /produtos) ou uma URL completa");
     for (const key of Object.keys(PATCH_FIELDS)) {
       for (const field of PATCH_FIELDS[key]) {
-        if (key.endsWith("api::product.product") && field === "slug") continue;
         expect(harness.config(key).metadatas[field].edit.label).not.toMatch(
           /^Edit /,
         );
@@ -624,7 +669,7 @@ describe("seedAdminViews", () => {
     }
     expect(harness.rows.get(MARKER_KEY)).toMatchObject({
       key: MARKER_KEY,
-      value: JSON.stringify(2),
+      value: JSON.stringify(4),
       type: "number",
       environment: "",
       tag: "",

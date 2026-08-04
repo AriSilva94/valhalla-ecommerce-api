@@ -1,3 +1,23 @@
+# Valhalla — API (Strapi)
+
+## Preço do produto
+
+O preço que a loja exibe é o **da variação** (`variants[].price`). Todo produto tem
+pelo menos uma variação, então é sempre esse valor que aparece no site.
+
+`basePrice` é derivado: a cada gravação, `src/utils/product-autofill-middleware.ts`
+grava nele o menor preço entre as variações. Por isso ele não aparece no formulário
+do admin — editá-lo não mudava nada no site e era a origem do bug de produtos
+travados em R$ 99,99.
+
+Para mudar um preço: abrir o produto no admin → **Variações** → campo **Preço (R$)**.
+
+O catálogo original foi criado por `scripts/seed-catalog.js` com o placeholder
+99.99 em todas as variações. `src/utils/variant-price-backfill.ts` roda uma única
+vez no boot de cada ambiente (marcador `valhalla_variant_price_backfill_version`
+no core store) e leva para a variação o preço que já tinha sido corrigido no
+`basePrice`, republicando os documentos que estavam publicados.
+
 # 🚀 Getting started with Strapi
 
 Strapi comes with a full featured [Command Line Interface](https://docs.strapi.io/dev-docs/cli) (CLI) which lets you scaffold and manage your project in seconds.
