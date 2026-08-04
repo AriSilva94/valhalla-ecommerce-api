@@ -13,10 +13,8 @@ travados em R$ 99,99.
 Para mudar um preço: abrir o produto no admin → **Variações** → campo **Preço (R$)**.
 
 O catálogo original foi criado por `scripts/seed-catalog.js` com o placeholder
-99.99 em todas as variações. `src/utils/variant-price-backfill.ts` roda uma única
-vez no boot de cada ambiente (marcador `valhalla_variant_price_backfill_version`
-no core store) e leva para a variação o preço que já tinha sido corrigido no
-`basePrice`, republicando os documentos que estavam publicados.
+99.99 em todas as variações. Produto ainda em R$ 99,99 é produto sem preço
+definido pelo cliente.
 
 # 🚀 Getting started with Strapi
 
