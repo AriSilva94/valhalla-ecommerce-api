@@ -3,6 +3,7 @@ import type { Core } from '@strapi/strapi';
 import { seedAdminViews } from './utils/admin-view-seed';
 import { rewriteStrapiMediaFiles } from './utils/media-cdn-rewrite';
 import { registerProductAutofill } from './utils/product-autofill-middleware';
+import { backfillVariantPrices } from './utils/variant-price-backfill';
 
 // Content types the frontend reads without auth. Grant these to the Public role
 // on every boot so a fresh database (e.g. a new Postgres deploy) serves the API.
@@ -56,5 +57,6 @@ export default {
     }
 
     await seedAdminViews(strapi);
+    await backfillVariantPrices(strapi);
   },
 };
