@@ -39,8 +39,7 @@
       "inversedBy": "products"
     },
     "basePrice": {
-      "type": "decimal",
-      "required": true
+      "type": "decimal"
     },
     "variantGroupLabel": {
       "type": "string"

@@ -63,6 +63,74 @@ describe('autofillProductData', () => {
   });
 });
 
+// basePrice is only a fallback for the storefront: it reads variants[0].price
+// and every product is required to have at least one variant, so an admin
+// editing basePrice by hand changed nothing on the site. It is now derived from
+// the variants and hidden from the admin form, which makes the variant price
+// the single source of truth.
+describe('autofillProductData: basePrice derivado das variações', () => {
+  it('usa o menor preço entre as variações recebidas', () => {
+    const out = autofillProductData({
+      name: 'Produto Novo',
+      variants: [
+        { configLabel: '256GB', price: 149.9 },
+        { configLabel: '128GB', price: 99.9 },
+      ],
+    });
+
+    expect(out.basePrice).toBe(99.9);
+  });
+
+  it('sobrescreve o basePrice enviado, que nunca é a fonte da verdade', () => {
+    const out = autofillProductData(
+      { basePrice: 99.99, variants: [{ configLabel: 'Padrão', price: 32 }] },
+      { name: 'Pasta Térmica', slug: 'pasta-termica' }
+    );
+
+    expect(out.basePrice).toBe(32);
+  });
+
+  it('aceita preço em string, como chega do REST', () => {
+    const out = autofillProductData(
+      { variants: [{ configLabel: 'Padrão', price: '28.49' }] },
+      { name: 'Ventoinha', slug: 'ventoinha' }
+    );
+
+    expect(out.basePrice).toBe(28.49);
+  });
+
+  it('ignora variações sem preço utilizável', () => {
+    const out = autofillProductData({
+      name: 'Produto Novo',
+      variants: [
+        { configLabel: 'A', price: null },
+        { configLabel: 'B', price: 45 },
+      ],
+    });
+
+    expect(out.basePrice).toBe(45);
+  });
+
+  it('não toca no basePrice quando nenhuma variação tem preço', () => {
+    const out = autofillProductData({
+      name: 'Produto Novo',
+      basePrice: 10,
+      variants: [{ configLabel: 'A', price: undefined }],
+    });
+
+    expect(out.basePrice).toBe(10);
+  });
+
+  it('não injeta basePrice em patch que não mexe nas variações', () => {
+    const out = autofillProductData(
+      { warranty: '12 meses' },
+      { name: 'Produto', slug: 'produto', variants: [{ price: 32 }] }
+    );
+
+    expect(out).not.toHaveProperty('basePrice');
+  });
+});
+
 describe('createAsyncSerializer', () => {
   it('mantém somente uma escrita ativa e preserva a ordem', async () => {
     const serialize = createAsyncSerializer();

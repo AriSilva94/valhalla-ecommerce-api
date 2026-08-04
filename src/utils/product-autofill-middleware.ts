@@ -1,6 +1,6 @@
 import type { Core } from '@strapi/strapi';
 
-import { buildSeoDefaults, fillVariantSkus, slugify } from './product-autofill';
+import { buildSeoDefaults, fillVariantSkus, lowestVariantPrice, slugify } from './product-autofill';
 
 const hasOwn = (value: object, key: PropertyKey): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
@@ -46,6 +46,13 @@ export function autofillProductData(
   const effectiveSlug = out.slug && String(out.slug).trim() ? out.slug : existing?.slug;
   if (Array.isArray(out.variants) && effectiveSlug) {
     out.variants = fillVariantSkus(effectiveSlug, out.variants, reservedSkus);
+  }
+
+  // Only recompute when the write actually carries variants: a patch that
+  // touches an unrelated field must stay a patch of that field.
+  if (Array.isArray(out.variants)) {
+    const derivedBasePrice = lowestVariantPrice(out.variants);
+    if (derivedBasePrice !== null) out.basePrice = derivedBasePrice;
   }
 
   const hasIncomingSeo = hasOwn(data, 'seo');
