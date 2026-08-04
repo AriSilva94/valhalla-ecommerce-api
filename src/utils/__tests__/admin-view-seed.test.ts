@@ -382,10 +382,6 @@ describe("seedAdminViews", () => {
     expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(4));
   });
 
-  // v4 exists because the client edited "Preço base" expecting the storefront to
-  // follow it. The field is now derived from the variants, so it leaves the
-  // admin form and the list, and the slug takes its place so a renamed product
-  // can have its URL corrected.
   it("migra v2 para v4 mexendo somente na view de produto", async () => {
     const harness = makeHarness();
     const productKey = `${CONTENT_TYPE_PREFIX}api::product.product`;
@@ -428,9 +424,6 @@ describe("seedAdminViews", () => {
     expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(4));
   });
 
-  // A marker with value 3 was found in a live database even though no released
-  // version ever wrote one, so 3 was skipped: an install stuck there must still
-  // receive the product view upgrade.
   it("migra o marker órfão v3 para v4", async () => {
     const harness = makeHarness();
     const productKey = `${CONTENT_TYPE_PREFIX}api::product.product`;

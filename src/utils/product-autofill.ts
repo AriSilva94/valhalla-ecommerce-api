@@ -41,15 +41,8 @@ interface PricedVariant {
   price?: number | string | null;
 }
 
-// The storefront reads variants[0].price and only falls back to basePrice when a
-// product has no variant — which the schema forbids. basePrice is therefore
-// reference data, and deriving it from the variants keeps it from drifting away
-// from what the site actually shows. Returns null when no variant carries a
-// usable price, so the caller leaves the stored value alone.
 export function lowestVariantPrice(variants: PricedVariant[]): number | null {
   const prices = variants
-    // Number(null) and Number('') are 0, so blanks have to go before coercion or
-    // a variant with no price would drag basePrice down to zero.
     .map((variant) => variant?.price)
     .filter((price) => price !== null && price !== undefined && String(price).trim() !== '')
     .map(Number)

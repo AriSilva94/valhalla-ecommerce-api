@@ -48,8 +48,6 @@ export function autofillProductData(
     out.variants = fillVariantSkus(effectiveSlug, out.variants, reservedSkus);
   }
 
-  // Only recompute when the write actually carries variants: a patch that
-  // touches an unrelated field must stay a patch of that field.
   if (Array.isArray(out.variants)) {
     const derivedBasePrice = lowestVariantPrice(out.variants);
     if (derivedBasePrice !== null) out.basePrice = derivedBasePrice;
