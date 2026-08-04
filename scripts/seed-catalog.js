@@ -10,9 +10,7 @@
 // The photos carry no pricing, so every variant gets PLACEHOLDER_PRICE. It is
 // deliberately a plausible non-zero value: products are published so the
 // storefront can be exercised end to end, and 0 would render as "free" or
-// break checkout maths. The client only has to correct the price per variant —
-// that is what the storefront reads, and basePrice is derived from it by
-// src/utils/product-autofill-middleware.ts, so it is not written here.
+// break checkout maths.
 //
 // Usage:
 //   STRAPI_URL=http://localhost:1337 STRAPI_TOKEN=xxx node scripts/seed-catalog.js --yes

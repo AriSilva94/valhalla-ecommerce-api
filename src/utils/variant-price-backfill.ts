@@ -1,15 +1,5 @@
 import type { Core } from '@strapi/strapi';
 
-// One-shot repair for the catalogue seeded by scripts/seed-catalog.js: it wrote
-// 99.99 into basePrice *and* into every variant, expecting the client to enter
-// the real prices in the admin. The admin only offered basePrice, so the real
-// prices were typed there while the storefront kept reading variants[0].price —
-// products showed 99.99 no matter what was saved. This carries each correction
-// over to the variant, which is now the single source of truth.
-//
-// Runs at bootstrap, guarded by a core-store marker, so every environment
-// repairs itself once on deploy and never again.
-
 const PRODUCT_UID = 'api::product.product';
 const PAGE_SIZE = 100;
 
@@ -53,8 +43,6 @@ export function planVariantPriceBackfill(
     const variants = product.variants || [];
     const basePrice = toPrice(product.basePrice);
 
-    // A basePrice still on the placeholder teaches nothing, and a variant that
-    // already carries a real price is what the storefront shows — leave it.
     if (!variants.length || basePrice === null || basePrice === placeholder) continue;
     if (!variants.some((variant) => toPrice(variant.price) === placeholder)) continue;
 
@@ -116,8 +104,6 @@ export async function backfillVariantPrices(
   const plan = planVariantPriceBackfill(drafts);
   const documents = strapi.documents(PRODUCT_UID);
 
-  // Updating a document only touches its draft, so anything already live has to
-  // be republished for the storefront to see the corrected price.
   const publishedIds = new Set(
     (await findAllProducts(strapi, 'published')).map((product) => product.documentId)
   );

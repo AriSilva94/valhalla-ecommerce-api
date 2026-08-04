@@ -7,11 +7,6 @@ import {
   planVariantPriceBackfill,
 } from '../variant-price-backfill';
 
-// scripts/seed-catalog.js wrote 99.99 into both basePrice and every variant,
-// expecting the client to correct it in the admin. The admin only exposed
-// basePrice, so the corrections landed there while the storefront kept reading
-// the untouched variant price. This moves those corrections to where the site
-// actually reads them.
 describe('planVariantPriceBackfill', () => {
   it('leva o preço corrigido no basePrice para a variação ainda no placeholder', () => {
     const plan = planVariantPriceBackfill(

@@ -1,8 +1,5 @@
 import type { Core } from "@strapi/strapi";
 
-// 3 is burned: a marker with that value was found in a running database even
-// though no released version ever wrote it, so an install sitting on it would
-// silently skip this upgrade. Numbering resumes at 4.
 const SEED_VERSION = 4;
 const MARKER_KEY = "valhalla_admin_seed_version";
 
@@ -94,12 +91,6 @@ const PRODUCT_V2_PATCH: ViewPatch = {
   editLayout: PRODUCT_EDIT_LAYOUT,
 };
 
-// basePrice gives up the slot it held since v1. The storefront reads
-// variants[0].price and every product must have at least one variant, so the
-// field never reached the site; editing it in the admin looked like a price
-// change that silently did nothing. It is now derived from the variants
-// (product-autofill-middleware) and the slug takes its place, so a product that
-// was renamed can have its URL corrected instead of keeping the old one.
 const PRODUCT_EDIT_LAYOUT_V4 = [
   [
     { name: "name", size: 6 },
@@ -130,8 +121,6 @@ const PRODUCT_V4_PATCH: ViewPatch = {
 const PRODUCT_PATCH: ViewPatch = {
   ...PRODUCT_V1_PATCH,
   fields: { ...PRODUCT_V1_PATCH.fields, ...PRODUCT_V4_FIELDS },
-  // `hidden` prunes the layouts in place, but `listFields` is assigned after it,
-  // so a fresh install has to start from a list that already excludes basePrice.
   listFields: ["mainImage", "name", "category"],
   editLayout: PRODUCT_EDIT_LAYOUT_V4,
 };
@@ -382,9 +371,6 @@ const V4_MIGRATION_PATCHES: Record<string, ViewPatch> = {
   [`${CONTENT_TYPE_PREFIX}api::product.product`]: PRODUCT_V4_PATCH,
 };
 
-// Deltas, so an install already carrying manual tweaks only receives what each
-// version actually introduced. A fresh install skips them: ALL_PATCHES already
-// describes the current state.
 const MIGRATION_PATCHES: Record<number, Record<string, ViewPatch>> = {
   2: V2_MIGRATION_PATCHES,
   4: V4_MIGRATION_PATCHES,
@@ -516,8 +502,6 @@ function applyPatch(config: any, patch: ViewPatch): void {
           .filter((row: unknown) => !Array.isArray(row) || row.length > 0);
       }
 
-      // Pruning only the edit form would still leave the field as a column in
-      // the list view, where it reads like the authoritative value.
       if (Array.isArray(config.layouts?.list)) {
         config.layouts.list = config.layouts.list.filter(
           (listField: unknown) => listField !== field,

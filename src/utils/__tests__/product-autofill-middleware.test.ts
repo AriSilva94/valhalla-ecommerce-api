@@ -63,11 +63,6 @@ describe('autofillProductData', () => {
   });
 });
 
-// basePrice is only a fallback for the storefront: it reads variants[0].price
-// and every product is required to have at least one variant, so an admin
-// editing basePrice by hand changed nothing on the site. It is now derived from
-// the variants and hidden from the admin form, which makes the variant price
-// the single source of truth.
 describe('autofillProductData: basePrice derivado das variações', () => {
   it('usa o menor preço entre as variações recebidas', () => {
     const out = autofillProductData({
