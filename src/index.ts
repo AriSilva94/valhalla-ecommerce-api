@@ -1,6 +1,7 @@
 import type { Core } from '@strapi/strapi';
 
 import { seedAdminViews } from './utils/admin-view-seed';
+import { backfillCategoryOrder } from './utils/category-order-backfill';
 import { rewriteStrapiMediaFiles } from './utils/media-cdn-rewrite';
 import { registerProductAutofill } from './utils/product-autofill-middleware';
 
@@ -53,6 +54,13 @@ export default {
           }
         }
       }
+    }
+
+    const categoryOrder = await backfillCategoryOrder(strapi);
+    if (categoryOrder.updated > 0) {
+      strapi.log.info(
+        `Migrated legacy order to sortOrder on ${categoryOrder.updated}/${categoryOrder.total} categories`
+      );
     }
 
     await seedAdminViews(strapi);

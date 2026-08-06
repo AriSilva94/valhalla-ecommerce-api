@@ -75,6 +75,9 @@ const uploadConfig = (params: Core.Config.Shared.ConfigParams) => {
 };
 
 const config = (params: Core.Config.Shared.ConfigParams): Core.Config.Plugin => ({
+  'sortable-entries': {
+    enabled: true,
+  },
   'users-permissions': {
     config: {
       jwtManagement: 'refresh',
