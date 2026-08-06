@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { seedAdminViews } from "../admin-view-seed";
+import { SEED_VERSION, seedAdminViews } from "../admin-view-seed";
 
 const CONTENT_TYPE_PREFIX =
   "plugin_content_manager_configuration_content_types::";
@@ -45,6 +45,8 @@ const PATCH_FIELDS: Record<string, string[]> = {
     "name",
     "slug",
     "description",
+    "sortOrder",
+    "order",
     "image",
     "products",
   ],
@@ -263,7 +265,7 @@ describe("seedAdminViews", () => {
     harness.rows.set(MARKER_KEY, {
       id: 99,
       key: MARKER_KEY,
-      value: JSON.stringify(4),
+      value: JSON.stringify(SEED_VERSION),
       type: "number",
       environment: "",
       tag: "",
@@ -297,11 +299,11 @@ describe("seedAdminViews", () => {
       harness.config(`${CONTENT_TYPE_PREFIX}api::product.product`).metadatas
         .name.edit.label,
     ).toBe("Nome do produto");
-    expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(4));
+    expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(SEED_VERSION));
     expect(harness.coreStore.create).not.toHaveBeenCalled();
   });
 
-  it("migra v1 para v4 sem sobrescrever customizações dos patches antigos", async () => {
+  it("migra v1 para a versão atual sem sobrescrever customizações dos patches antigos", async () => {
     const harness = makeHarness();
     const productKey = `${CONTENT_TYPE_PREFIX}api::product.product`;
     const variantKey = `${COMPONENT_PREFIX}ecommerce.variant`;
@@ -356,6 +358,7 @@ describe("seedAdminViews", () => {
     );
     const expectedUpdatedIds = [
       productKey,
+      `${CONTENT_TYPE_PREFIX}api::category.category`,
       homepageKey,
       `${CONTENT_TYPE_PREFIX}api::site-setting.site-setting`,
       `${COMPONENT_PREFIX}institutional.banner`,
@@ -379,12 +382,13 @@ describe("seedAdminViews", () => {
     expect(updatedIds.sort((left, right) => left - right)).toEqual(
       expectedUpdatedIds.sort((left, right) => left - right),
     );
-    expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(4));
+    expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(SEED_VERSION));
   });
 
-  it("migra v2 para v4 mexendo somente na view de produto", async () => {
+  it("migra v2 para a versão atual mexendo apenas nas views de produto (v4) e categoria (v5/v6)", async () => {
     const harness = makeHarness();
     const productKey = `${CONTENT_TYPE_PREFIX}api::product.product`;
+    const categoryKey = `${CONTENT_TYPE_PREFIX}api::category.category`;
     const product = harness.config(productKey);
 
     product.metadatas.name.edit.label = "Nome personalizado";
@@ -410,6 +414,17 @@ describe("seedAdminViews", () => {
       "Calculado com o menor preço entre as variações. Para mudar o preço, edite a variação",
     );
 
+    const category = harness.config(categoryKey);
+    expect(category.metadatas.sortOrder.edit.label).toBe("Ordem");
+    expect(category.layouts.list).toEqual(["name", "sortOrder", "products"]);
+    expect(category.settings).toMatchObject({
+      defaultSortBy: "sortOrder",
+      defaultSortOrder: "ASC",
+    });
+    expect(
+      category.layouts.edit.flat().map((cell: { name: string }) => cell.name),
+    ).not.toContain("order");
+
     const updatedIds = harness.coreStore.update.mock.calls.map(
       ([
         {
@@ -417,11 +432,12 @@ describe("seedAdminViews", () => {
         },
       ]) => id,
     );
-    expect(updatedIds.sort((left, right) => left - right)).toEqual([
-      harness.rows.get(productKey)!.id,
-      99,
-    ]);
-    expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(4));
+    expect(updatedIds.sort((left, right) => left - right)).toEqual(
+      [harness.rows.get(productKey)!.id, harness.rows.get(categoryKey)!.id, 99].sort(
+        (left, right) => left - right,
+      ),
+    );
+    expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(SEED_VERSION));
   });
 
   it("migra o marker órfão v3 para v4", async () => {
@@ -441,7 +457,7 @@ describe("seedAdminViews", () => {
     expect(harness.config(productKey).layouts.edit).toEqual(
       PRODUCT_EDIT_LAYOUT_V4,
     );
-    expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(4));
+    expect(harness.rows.get(MARKER_KEY)?.value).toBe(JSON.stringify(SEED_VERSION));
   });
 
   it("avisa sobre cada config ausente e não altera nenhuma config nem grava marker", async () => {
@@ -662,7 +678,7 @@ describe("seedAdminViews", () => {
     }
     expect(harness.rows.get(MARKER_KEY)).toMatchObject({
       key: MARKER_KEY,
-      value: JSON.stringify(4),
+      value: JSON.stringify(SEED_VERSION),
       type: "number",
       environment: "",
       tag: "",
