@@ -1,6 +1,6 @@
 import type { Core } from "@strapi/strapi";
 
-const SEED_VERSION = 4;
+export const SEED_VERSION = 6;
 const MARKER_KEY = "valhalla_admin_seed_version";
 
 interface FieldPatch {
@@ -164,13 +164,26 @@ const V1_SIMPLE_PATCHES: Record<string, ViewPatch> = {
     },
   },
   [`${CONTENT_TYPE_PREFIX}api::category.category`]: {
+    settings: {
+      defaultSortBy: "sortOrder",
+      defaultSortOrder: "ASC",
+      mainField: "name",
+    },
+    listFields: ["name", "sortOrder", "products"],
     fields: {
       name: { label: "Nome" },
       slug: {
         label: "Endereço (URL)",
-        description: "Gerado automaticamente — não é preciso mexer",
+        description:
+          "Gerado automaticamente — não é preciso mexer",
       },
       description: { label: "Descrição" },
+      sortOrder: {
+        label: "Ordem",
+        description:
+          "Use o botão de arrastar na lista de categorias para reordenar; este número é atualizado sozinho",
+      },
+      order: { label: "Ordem (legado)", hidden: true },
       image: { label: "Imagem" },
       products: { label: "Produtos" },
     },
@@ -371,9 +384,50 @@ const V4_MIGRATION_PATCHES: Record<string, ViewPatch> = {
   [`${CONTENT_TYPE_PREFIX}api::product.product`]: PRODUCT_V4_PATCH,
 };
 
+const CATEGORY_V5_PATCH: ViewPatch = {
+  settings: {
+    defaultSortBy: "order",
+    defaultSortOrder: "ASC",
+  },
+  listFields: ["name", "order", "products"],
+  fields: {
+    order: {
+      label: "Ordem",
+      description:
+        "Menor número aparece primeiro no site (menu, rodapé e página de categorias)",
+    },
+  },
+};
+
+const V5_MIGRATION_PATCHES: Record<string, ViewPatch> = {
+  [`${CONTENT_TYPE_PREFIX}api::category.category`]: CATEGORY_V5_PATCH,
+};
+
+const CATEGORY_V6_PATCH: ViewPatch = {
+  settings: {
+    defaultSortBy: "sortOrder",
+    defaultSortOrder: "ASC",
+  },
+  listFields: ["name", "sortOrder", "products"],
+  fields: {
+    sortOrder: {
+      label: "Ordem",
+      description:
+        "Use o botão de arrastar na lista de categorias para reordenar; este número é atualizado sozinho",
+    },
+    order: { label: "Ordem (legado)", hidden: true },
+  },
+};
+
+const V6_MIGRATION_PATCHES: Record<string, ViewPatch> = {
+  [`${CONTENT_TYPE_PREFIX}api::category.category`]: CATEGORY_V6_PATCH,
+};
+
 const MIGRATION_PATCHES: Record<number, Record<string, ViewPatch>> = {
   2: V2_MIGRATION_PATCHES,
   4: V4_MIGRATION_PATCHES,
+  5: V5_MIGRATION_PATCHES,
+  6: V6_MIGRATION_PATCHES,
 };
 
 function patchesForUpgrade(currentVersion: number, key: string): ViewPatch[] {
