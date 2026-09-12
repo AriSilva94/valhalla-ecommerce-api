@@ -133,3 +133,6 @@ build
 .strapi-cloud.json
 # Fotos originais do cliente (192 arquivos) - importadas via npm run import:media
 docs/fotos/
+
+# Local Git worktrees
+.worktrees/
