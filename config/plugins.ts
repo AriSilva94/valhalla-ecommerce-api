@@ -82,12 +82,12 @@ const config = (params: Core.Config.Shared.ConfigParams): Core.Config.Plugin => 
     config: {
       jwtManagement: 'refresh',
       jwtSecret: params.env('JWT_SECRET'),
-      accessTokenLifespan: 600,
-      maxRefreshTokenLifespan: 2592000,
-      idleRefreshTokenLifespan: 1209600,
-      maxSessionLifespan: 2592000,
-      idleSessionLifespan: 1209600,
       sessions: {
+        accessTokenLifespan: 600,
+        maxRefreshTokenLifespan: 2592000,
+        idleRefreshTokenLifespan: 1209600,
+        maxSessionLifespan: 2592000,
+        idleSessionLifespan: 1209600,
         httpOnly: false,
       },
     },

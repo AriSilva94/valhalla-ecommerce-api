@@ -245,7 +245,7 @@ Usar `ASAAS_API_URL`, `ASAAS_API_KEY`, `ASAAS_TIMEOUT_MS` e `ASAAS_USER_AGENT`. 
 
 - [ ] **Passo 3: Proteger a rota**
 
-Adicionar `ASAAS_TEST_TOKEN` sem valor ao `.env.example`. Criar `global::internal-test-token` que compara em tempo constante o header `x-internal-test-token` com `ASAAS_TEST_TOKEN`, recusa token ausente ou inválido com `401` e não registra o valor. A rota `GET /api/asaas/test` usa essa política; não usar `auth: false` nem conceder permissão pública.
+Adicionar `ASAAS_TEST_TOKEN` sem valor ao `.env.example`. Criar `global::internal-test-token` que compara em tempo constante o header `x-internal-test-token` com `ASAAS_TEST_TOKEN`, recusa token ausente ou inválido com `403` (mapeamento padrão do Strapi de `PolicyError` para `ForbiddenError`) e não registra o valor. A rota `GET /api/asaas/test` usa essa política; `auth: false` combinado com essa política é a configuração correta e necessária, já que nenhuma role recebe essa permissão no bootstrap — sem `auth: false`, a autenticação padrão retornaria 403 para toda requisição independentemente da validade do token.
 
 - [ ] **Passo 4: Mapear a resposta**
 

@@ -36,7 +36,7 @@ export async function configureCustomerAuth(
       ...grant,
       google: buildGoogleProvider(
         { clientId: options.googleClientId, clientSecret: options.googleClientSecret },
-        options.strapiPublicUrl,
+        options.frontendUrl,
         asSettings(grant.google)
       ),
     }

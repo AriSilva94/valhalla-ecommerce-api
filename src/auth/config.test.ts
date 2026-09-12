@@ -22,17 +22,17 @@ describe('buildGoogleProvider', () => {
     });
   });
 
-  it('habilita Google com callback público do Strapi', () => {
+  it('habilita Google com callback da BFF do frontend', () => {
     expect(
       buildGoogleProvider(
         { clientId: 'client-id', clientSecret: 'client-secret' },
-        'https://api.example.com/'
+        'https://loja.example.com/'
       )
     ).toMatchObject({
       enabled: true,
       key: 'client-id',
       secret: 'client-secret',
-      callback: 'https://api.example.com/api/connect/google/callback',
+      callback: 'https://loja.example.com/api/auth/google/callback',
     });
   });
 });
@@ -43,11 +43,8 @@ describe('buildEmailTemplates', () => {
 
     expect(templates.reset_password.options.message).toContain('<%= URL %>?code=<%= TOKEN %>');
     expect(templates.email_confirmation.options.message).toContain(
-      '<%= URL %>?confirmation=<%= CODE %>'
+      'https://loja.example.com/auth/email-confirmed?confirmation=<%= CODE %>'
     );
     expect(templates.reset_password.options.message).toContain('https://loja.example.com/auth/reset-password');
-    expect(templates.email_confirmation.options.message).toContain(
-      'https://loja.example.com/auth/email-confirmed'
-    );
   });
 });

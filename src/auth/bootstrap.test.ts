@@ -38,7 +38,7 @@ describe('configureCustomerAuth', () => {
     expect(stores.get('advanced')?.set).toHaveBeenCalledOnce();
     expect(stores.get('grant')?.set).toHaveBeenCalledWith({
       value: expect.objectContaining({
-        google: expect.objectContaining({ enabled: true, callback: 'https://api.example.com/api/connect/google/callback' }),
+        google: expect.objectContaining({ enabled: true, callback: 'https://loja.example.com/api/auth/google/callback' }),
       }),
     });
     expect(stores.get('email')?.set).toHaveBeenCalledOnce();

@@ -26,10 +26,10 @@ export default {
 
   async bootstrap({ strapi }: { strapi: Core.Strapi }) {
     await configureCustomerAuth(strapi, {
-      frontendUrl: process.env.FRONTEND_PUBLIC_URL ?? 'http://localhost:3000',
+      frontendUrl: process.env.FRONTEND_PUBLIC_URL || 'http://localhost:3000',
       strapiPublicUrl:
-        strapi.config.get<string>('server.url', process.env.STRAPI_PUBLIC_URL ?? 'http://localhost:1337'),
-      emailFrom: process.env.EMAIL_FROM ?? 'Valhalla <no-reply@example.com>',
+        strapi.config.get<string>('server.url', process.env.STRAPI_PUBLIC_URL || 'http://localhost:1337'),
+      emailFrom: process.env.EMAIL_FROM || 'Valhalla <no-reply@example.com>',
       googleClientId: process.env.GOOGLE_CLIENT_ID,
       googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
     });

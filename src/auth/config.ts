@@ -27,7 +27,7 @@ export function buildAdvancedSettings(current: Settings, frontendUrl: string): S
 
 export function buildGoogleProvider(
   credentials: { clientId?: string; clientSecret?: string },
-  strapiPublicUrl: string,
+  frontendUrl: string,
   current: Settings = {}
 ): Settings {
   if (!credentials.clientId || !credentials.clientSecret) {
@@ -39,7 +39,7 @@ export function buildGoogleProvider(
     enabled: true,
     key: credentials.clientId,
     secret: credentials.clientSecret,
-    callback: `${trimTrailingSlash(strapiPublicUrl)}/api/connect/google/callback`,
+    callback: `${trimTrailingSlash(frontendUrl)}/api/auth/google/callback`,
   };
 }
 
@@ -51,7 +51,7 @@ export function buildEmailTemplates(
   const baseUrl = trimTrailingSlash(frontendUrl);
   const fromIdentity = parseEmailIdentity(from);
   const resetUrl = '<%= URL %>?code=<%= TOKEN %>';
-  const confirmationUrl = '<%= URL %>?confirmation=<%= CODE %>';
+  const confirmationUrl = `${baseUrl}/auth/email-confirmed?confirmation=<%= CODE %>`;
 
   return {
     ...current,

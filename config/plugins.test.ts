@@ -23,10 +23,14 @@ describe('plugins configuration', () => {
     expect(plugins['users-permissions'].config).toMatchObject({
       jwtManagement: 'refresh',
       jwtSecret: 'jwt-secret',
-      accessTokenLifespan: 600,
-      maxRefreshTokenLifespan: 2592000,
-      idleRefreshTokenLifespan: 1209600,
-      sessions: { httpOnly: false },
+      sessions: {
+        accessTokenLifespan: 600,
+        maxRefreshTokenLifespan: 2592000,
+        idleRefreshTokenLifespan: 1209600,
+        maxSessionLifespan: 2592000,
+        idleSessionLifespan: 1209600,
+        httpOnly: false,
+      },
     });
     expect(plugins.email.config).toMatchObject({
       provider: 'nodemailer',
