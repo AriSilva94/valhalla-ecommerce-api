@@ -1,5 +1,6 @@
 import type { Core } from '@strapi/strapi';
 
+import { configureCustomerAuth } from './auth/bootstrap';
 import { seedAdminViews } from './utils/admin-view-seed';
 import { backfillCategoryOrder } from './utils/category-order-backfill';
 import { rewriteStrapiMediaFiles } from './utils/media-cdn-rewrite';
@@ -24,6 +25,15 @@ export default {
   },
 
   async bootstrap({ strapi }: { strapi: Core.Strapi }) {
+    await configureCustomerAuth(strapi, {
+      frontendUrl: process.env.FRONTEND_PUBLIC_URL ?? 'http://localhost:3000',
+      strapiPublicUrl:
+        strapi.config.get<string>('server.url', process.env.STRAPI_PUBLIC_URL ?? 'http://localhost:1337'),
+      emailFrom: process.env.EMAIL_FROM ?? 'Valhalla <no-reply@example.com>',
+      googleClientId: process.env.GOOGLE_CLIENT_ID,
+      googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    });
+
     const mediaRewrite = await rewriteStrapiMediaFiles(strapi, {
       publicUrl: process.env.R2_PUBLIC_URL || '',
       rootPath: process.env.R2_ROOT_PATH || 'assets/images',

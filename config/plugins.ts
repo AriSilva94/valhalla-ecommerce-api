@@ -81,8 +81,38 @@ const config = (params: Core.Config.Shared.ConfigParams): Core.Config.Plugin => 
   'users-permissions': {
     config: {
       jwtManagement: 'refresh',
+      jwtSecret: params.env('JWT_SECRET'),
+      accessTokenLifespan: 600,
+      maxRefreshTokenLifespan: 2592000,
+      idleRefreshTokenLifespan: 1209600,
+      maxSessionLifespan: 2592000,
+      idleSessionLifespan: 1209600,
       sessions: {
-        httpOnly: true,
+        httpOnly: false,
+      },
+    },
+  },
+  email: {
+    config: {
+      provider: 'nodemailer',
+      providerOptions: {
+        host: params.env('SMTP_HOST', 'localhost'),
+        port: Number(params.env('SMTP_PORT', 1025)),
+        secure: params.env('SMTP_SECURE', 'false') === 'true',
+        auth:
+          params.env('SMTP_USER') && params.env('SMTP_PASS')
+            ? {
+                user: params.env('SMTP_USER'),
+                pass: params.env('SMTP_PASS'),
+              }
+            : undefined,
+      },
+      settings: {
+        defaultFrom: params.env('EMAIL_FROM', 'Valhalla <no-reply@example.com>'),
+        defaultReplyTo: params.env(
+          'EMAIL_REPLY_TO',
+          params.env('EMAIL_FROM', 'Valhalla <no-reply@example.com>')
+        ),
       },
     },
   },
