@@ -76,18 +76,14 @@ export async function testAsaasConnection(config: AsaasConfig): Promise<AsaasTes
   }
 }
 
+/**
+ * `AbortSignal.timeout()` (used above) only ever produces a `DOMException`
+ * with name `TimeoutError` (or `AbortError` if aborted for another reason)
+ * on Node 20+, so there is no other timeout-signaling path in this file to
+ * account for.
+ */
 function isTimeoutError(error: unknown): boolean {
-  if (error instanceof DOMException) {
-    return error.name === 'TimeoutError' || error.name === 'AbortError';
-  }
-
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'name' in error &&
-    ((error as { name?: unknown }).name === 'TimeoutError' ||
-      (error as { name?: unknown }).name === 'AbortError')
-  );
+  return error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError');
 }
 
 /**

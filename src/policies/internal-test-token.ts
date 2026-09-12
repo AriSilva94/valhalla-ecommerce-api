@@ -1,5 +1,7 @@
 import { timingSafeEqual } from 'crypto';
 
+import type { Core } from '@strapi/strapi';
+
 /**
  * Strapi 5 custom policy. Signature verified against
  * node_modules/@strapi/types/dist/core/policy.d.ts:
@@ -14,7 +16,7 @@ import { timingSafeEqual } from 'crypto';
  * comparison against ASAAS_TEST_TOKEN. This token is a separate secret from
  * ASAAS_API_KEY and is never logged.
  */
-export default (policyContext: any, _config: unknown, _opts: unknown): boolean => {
+export default (policyContext: Core.PolicyContext, _config: unknown, _opts: unknown): boolean => {
   const expectedToken = process.env.ASAAS_TEST_TOKEN;
 
   // Never allow when there is nothing configured to compare against.

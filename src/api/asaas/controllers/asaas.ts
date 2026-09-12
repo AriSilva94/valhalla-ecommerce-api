@@ -1,14 +1,21 @@
 import { randomBytes } from 'crypto';
 
+import type { Context } from 'koa';
+
 import { readAsaasConfigFromEnv, testAsaasConnection } from '../../../services/external/asaas.service';
 
 /**
  * Thin controller: delegates the actual network call to the pure service
  * and maps its result to the HTTP response per spec. Logs only
  * { route, status, correlationId } — never headers, keys, or response body.
+ *
+ * This is a hand-written (non-factory) controller, so there is no existing
+ * `factories.createCoreController` precedent to follow (see
+ * src/api/faq/controllers/faq.ts); `Context` is Strapi's own Koa-based
+ * request/response context type.
  */
 export default {
-  async test(ctx: any) {
+  async test(ctx: Context) {
     const correlationId = ctx.request.header['x-request-id'] || randomBytes(6).toString('hex');
     const config = readAsaasConfigFromEnv();
     const result = await testAsaasConnection(config);
