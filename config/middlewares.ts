@@ -4,6 +4,10 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Middlewar
   // Media served from R2 lives on another origin, so the default CSP would
   // block every thumbnail in the admin panel.
   const mediaOrigins = [env('R2_PUBLIC_URL')].filter(Boolean) as string[];
+  const corsOrigins = (env('CORS_ORIGINS', 'http://localhost:3000') as string)
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
   return [
     'strapi::logger',
@@ -22,7 +26,15 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Middlewar
         },
       },
     },
-    'strapi::cors',
+    {
+      name: 'strapi::cors',
+      config: {
+        origin: corsOrigins,
+        methods: ['GET', 'POST', 'OPTIONS'],
+        headers: ['Content-Type', 'Authorization', 'Origin'],
+        credentials: true,
+      },
+    },
     'strapi::poweredBy',
     'strapi::query',
     'strapi::body',
