@@ -1,0 +1,22 @@
+# Local dev override — adds a disposable SMTP catcher (Mailhog) so
+# registration/confirmation/reset emails don't fail locally (Strapi's
+# register call fails the whole request if the confirmation email can't be
+# sent). Not used by Dokploy, which deploys docker-compose.yml directly.
+#
+# Usage: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+
+services:
+  strapi:
+    environment:
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_SECURE: "false"
+    depends_on:
+      mailhog:
+        condition: service_started
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    restart: unless-stopped
+    ports:
+      - "8025:8025" # web UI — open http://localhost:8025 to read test emails

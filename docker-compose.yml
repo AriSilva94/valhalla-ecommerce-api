@@ -13,8 +13,8 @@ services:
       HOST: 0.0.0.0
       PORT: 1337
       # Public URL + proxy (Dokploy/Traefik terminates TLS)
-      PUBLIC_URL: ${PUBLIC_URL:?set PUBLIC_URL}
-      IS_PROXIED: "true"
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:1337}
+      IS_PROXIED: ${IS_PROXIED:-false}
       # --- Postgres ---
       DATABASE_CLIENT: postgres
       DATABASE_HOST: postgres
@@ -37,10 +37,29 @@ services:
       TRANSFER_TOKEN_SALT: ${TRANSFER_TOKEN_SALT:?set TRANSFER_TOKEN_SALT}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
+      # --- Customer authentication ---
+      FRONTEND_PUBLIC_URL: ${FRONTEND_PUBLIC_URL:-http://localhost:3000}
+      STRAPI_PUBLIC_URL: ${STRAPI_PUBLIC_URL:-http://localhost:1337}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Valhalla <no-reply@example.com>}
+      EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # --- Asaas (see docs/autenticacao-asaas) ---
+      ASAAS_API_URL: ${ASAAS_API_URL:-https://api-sandbox.asaas.com/v3}
+      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
+      ASAAS_TIMEOUT_MS: ${ASAAS_TIMEOUT_MS:-10000}
+      ASAAS_USER_AGENT: ${ASAAS_USER_AGENT:-Valhalla-Ecommerce/1.0 (Strapi; sandbox)}
+      ASAAS_TEST_TOKEN: ${ASAAS_TEST_TOKEN:-}
     volumes:
       - strapi-uploads:/opt/app/public/uploads
-    expose:
-      - "1337"
+    ports:
+      - "1337:1337"
     depends_on:
       postgres:
         condition: service_healthy
