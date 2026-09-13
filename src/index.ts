@@ -21,6 +21,7 @@ const PUBLIC_READ: Record<string, string[]> = {
 
 const AUTHENTICATED_ACTIONS: Record<string, string[]> = {
   'api::customer-profile.customer-profile': ['me', 'updateMe'],
+  'api::order.order': ['create', 'find', 'findOne'],
 };
 
 export default {
