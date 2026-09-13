@@ -95,7 +95,7 @@ describe('order controller: create', () => {
     });
     (asaas.getAsaasPixQrCode as any).mockResolvedValue({
       ok: true,
-      data: { encodedImage: 'b64', payload: 'copia-cola', expirationDate: '2026-09-13T00:00:00.000Z' },
+      data: { encodedImage: 'b64', payload: 'copia-cola', expirationDate: '2026-09-13 00:00:00' },
     });
 
     const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
@@ -134,7 +134,7 @@ describe('order controller: create', () => {
     });
     (asaas.getAsaasPixQrCode as any).mockResolvedValue({
       ok: true,
-      data: { encodedImage: 'b64', payload: 'copia-cola', expirationDate: '2026-09-13T00:00:00.000Z' },
+      data: { encodedImage: 'b64', payload: 'copia-cola', expirationDate: '2026-09-13 00:00:00' },
     });
 
     const profileWithoutCustomerId = { ...COMPLETE_PROFILE, asaasCustomerId: undefined };

@@ -56,6 +56,7 @@ services:
       ASAAS_TIMEOUT_MS: ${ASAAS_TIMEOUT_MS:-10000}
       ASAAS_USER_AGENT: ${ASAAS_USER_AGENT:-Valhalla-Ecommerce/1.0 (Strapi; sandbox)}
       ASAAS_TEST_TOKEN: ${ASAAS_TEST_TOKEN:-}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
     volumes:
       - strapi-uploads:/opt/app/public/uploads
     ports:

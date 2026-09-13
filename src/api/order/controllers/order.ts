@@ -1,6 +1,7 @@
 import type { Context } from 'koa';
 
 import { resolveOrderItems, type ProductLookup } from '../../../order/pricing';
+import { toUtcIsoFromSaoPauloNaive } from '../../../order/pixExpiration';
 import { serializeOrder, type OrderRecord } from '../../../order/serialize-order';
 import {
   createAsaasCustomer,
@@ -116,7 +117,7 @@ export default {
           asaasInvoiceUrl: chargeResult.data.invoiceUrl,
           pixQrCodeImage: qrResult.data.encodedImage,
           pixCopyPaste: qrResult.data.payload,
-          pixExpiration: qrResult.data.expirationDate,
+          pixExpiration: toUtcIsoFromSaoPauloNaive(qrResult.data.expirationDate),
         },
       });
 
