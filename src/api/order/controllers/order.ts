@@ -7,8 +7,14 @@ import { serializeOrder, type OrderRecord } from '../../../order/serialize-order
 import {
   createAsaasCheckout,
   createAsaasCustomer,
+  findAsaasPaymentByCheckoutSession,
   readAsaasConfigFromEnv,
+  simulateAsaasPixPayment,
 } from '../../../services/external/asaas.service';
+
+function isSandboxAsaasConfig(apiUrl: string): boolean {
+  return apiUrl.includes('sandbox');
+}
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
@@ -167,5 +173,52 @@ export default {
     if (!order) return ctx.notFound();
 
     ctx.body = { ok: true, data: serializeOrder(order) };
+  },
+
+  async simulatePayment(ctx: Context) {
+    const userId = ctx.state.user?.id;
+    if (!userId) return ctx.unauthorized();
+
+    const asaasConfig = readAsaasConfigFromEnv();
+    if (!isSandboxAsaasConfig(asaasConfig.apiUrl)) {
+      ctx.status = 403;
+      ctx.body = { ok: false, error: 'SANDBOX_ONLY' };
+      return;
+    }
+
+    const reference = ctx.params.id;
+    const order: OrderRecord | null = await strapi.db
+      .query('api::order.order')
+      .findOne({ where: { reference, user: userId } });
+
+    if (!order) return ctx.notFound();
+
+    if (order.status !== 'pending' || !order.asaasCheckoutId) {
+      ctx.status = 409;
+      ctx.body = { ok: false, error: 'ORDER_NOT_PENDING' };
+      return;
+    }
+
+    const paymentResult = await findAsaasPaymentByCheckoutSession(asaasConfig, order.asaasCheckoutId);
+    if (!paymentResult.ok) {
+      ctx.status = 502;
+      ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
+      return;
+    }
+
+    if (!paymentResult.data) {
+      ctx.status = 409;
+      ctx.body = { ok: false, error: 'PAYMENT_NOT_READY' };
+      return;
+    }
+
+    const confirmResult = await simulateAsaasPixPayment(asaasConfig, paymentResult.data.id);
+    if (!confirmResult.ok) {
+      ctx.status = 502;
+      ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
+      return;
+    }
+
+    ctx.body = { ok: true };
   },
 };

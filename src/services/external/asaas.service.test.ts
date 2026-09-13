@@ -4,6 +4,8 @@ import {
   testAsaasConnection,
   createAsaasCustomer,
   createAsaasCheckout,
+  findAsaasPaymentByCheckoutSession,
+  simulateAsaasPixPayment,
 } from './asaas.service';
 
 const baseConfig = {
@@ -199,6 +201,65 @@ describe('createAsaasCheckout', () => {
       cancelUrl: 'https://loja.example.com/checkout',
       expiredUrl: 'https://loja.example.com/checkout',
     });
+    expect(result).toEqual({ ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 });
+  });
+});
+
+describe('findAsaasPaymentByCheckoutSession', () => {
+  it('retorna o primeiro pagamento vinculado ao checkout', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [{ id: 'pay_123' }] }),
+    });
+    global.fetch = fetchMock as any;
+
+    const result = await findAsaasPaymentByCheckoutSession(config, 'chk_123');
+
+    expect(result).toEqual({ ok: true, data: { id: 'pay_123' } });
+    const [url] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://api-sandbox.asaas.com/v3/payments?checkoutSession=chk_123');
+  });
+
+  it('retorna null quando o checkout ainda não gerou pagamento', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [] }),
+    }) as any;
+
+    const result = await findAsaasPaymentByCheckoutSession(config, 'chk_123');
+
+    expect(result).toEqual({ ok: true, data: null });
+  });
+
+  it('mapeia falha para ASAAS_UNAVAILABLE', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }) as any;
+    const result = await findAsaasPaymentByCheckoutSession(config, 'chk_123');
+    expect(result).toEqual({ ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 });
+  });
+});
+
+describe('simulateAsaasPixPayment', () => {
+  it('chama o endpoint sandbox de confirmação e retorna o status atualizado', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ status: 'RECEIVED' }),
+    });
+    global.fetch = fetchMock as any;
+
+    const result = await simulateAsaasPixPayment(config, 'pay_123');
+
+    expect(result).toEqual({ ok: true, data: { status: 'RECEIVED' } });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://api-sandbox.asaas.com/v3/sandbox/payment/pay_123/confirm');
+    expect(init.method).toBe('POST');
+  });
+
+  it('mapeia falha para ASAAS_UNAVAILABLE', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }) as any;
+    const result = await simulateAsaasPixPayment(config, 'pay_123');
     expect(result).toEqual({ ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 });
   });
 });

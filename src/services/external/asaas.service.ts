@@ -173,3 +173,27 @@ export async function createAsaasCheckout(
     }),
   });
 }
+
+export async function findAsaasPaymentByCheckoutSession(
+  config: AsaasConfig,
+  checkoutSessionId: string
+): Promise<AsaasApiResult<{ id: string } | null>> {
+  const result = await asaasRequest<{ data: { id: string }[] }>(
+    config,
+    `/payments?checkoutSession=${encodeURIComponent(checkoutSessionId)}`,
+    { method: 'GET' }
+  );
+  if (!result.ok) return result;
+  return { ok: true, data: result.data.data[0] ?? null };
+}
+
+export async function simulateAsaasPixPayment(
+  config: AsaasConfig,
+  paymentId: string
+): Promise<AsaasApiResult<{ status: string }>> {
+  return asaasRequest<{ status: string }>(
+    config,
+    `/sandbox/payment/${encodeURIComponent(paymentId)}/confirm`,
+    { method: 'POST' }
+  );
+}
