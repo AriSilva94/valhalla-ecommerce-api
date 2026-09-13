@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto';
 
 import type { Context } from 'koa';
 
+import { mapAsaasEventToOrderStatus } from '../../../order/webhook-mapping';
 import { readAsaasConfigFromEnv, testAsaasConnection } from '../../../services/external/asaas.service';
 
 /**
@@ -37,5 +38,26 @@ export default {
 
     ctx.status = status;
     ctx.body = body;
+  },
+
+  async webhook(ctx: Context) {
+    const body = ctx.request.body as { event?: unknown; payment?: { id?: unknown } };
+    const event = typeof body?.event === 'string' ? body.event : '';
+    const paymentId = typeof body?.payment?.id === 'string' ? body.payment.id : '';
+
+    const status = mapAsaasEventToOrderStatus(event);
+
+    if (status && paymentId) {
+      const order = await strapi.db
+        .query('api::order.order')
+        .findOne({ where: { asaasPaymentId: paymentId } });
+
+      if (order) {
+        await strapi.db.query('api::order.order').update({ where: { id: order.id }, data: { status } });
+      }
+    }
+
+    ctx.status = 200;
+    ctx.body = { ok: true };
   },
 };

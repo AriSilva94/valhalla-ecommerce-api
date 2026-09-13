@@ -20,5 +20,14 @@ export default {
         auth: false,
       },
     },
+    {
+      method: 'POST',
+      path: '/asaas/webhook',
+      handler: 'asaas.webhook',
+      config: {
+        policies: ['global::asaas-webhook-token'],
+        auth: false,
+      },
+    },
   ],
 };
