@@ -136,3 +136,6 @@ docs/fotos/
 
 # Local Git worktrees
 .worktrees/
+
+# Google OAuth client secret downloaded from Google Cloud Console
+client_secret_*.json
