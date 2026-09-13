@@ -71,10 +71,25 @@ retorna erro dedicado e o frontend redireciona para o formulário de perfil.
 Sem `draftAndPublish`. `items` é gravado uma vez na criação e nunca mais
 editado (preço não muda se o produto mudar depois).
 
+## Relação com "Minha lista" (`/lista`)
+
+`/lista` hoje é uma lista de interesse: monta uma mensagem e abre o
+WhatsApp, com o aviso explícito "Nenhum pagamento é feito neste site"
+(`ListaClient.tsx`, step `"cart"`). Esse fluxo é mantido como está — não é
+removido nem reescrito. O checkout Pix é uma **segunda opção**, adicionada
+lado a lado com o botão existente "Revisar solicitação →" no mesmo step
+`"cart"`: um novo botão **"Pagar com Pix"** ao lado dele, usando o mesmo
+carrinho local (`app/lib/cart-store.ts`, mesmo `CartLine[]`). O aviso
+"Nenhum pagamento é feito neste site" é removido/ajustado só no contexto da
+review do WhatsApp (`step === "review"`), já que agora existe um caminho
+real de pagamento — mas o step `"review"`/WhatsApp em si não muda de
+comportamento.
+
 ## Fluxo de checkout
 
-1. Cliente logado, carrinho não vazio, clica **"Finalizar compra"** em
-   `/lista` → navega para `/checkout`.
+1. Cliente logado, carrinho não vazio, clica **"Pagar com Pix"** no step
+   `"cart"` de `/lista` → navega para `/checkout`. Sem sessão, redireciona
+   para `/entrar?returnTo=/checkout`.
 2. `/checkout` chama `GET /api/account/profile` (BFF). Perfil incompleto →
    mostra formulário (CPF, telefone, endereço) antes de prosseguir; ao
    salvar, chama `PUT /api/account/profile`.
