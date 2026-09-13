@@ -3,9 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   testAsaasConnection,
   createAsaasCustomer,
-  createAsaasPixCharge,
-  getAsaasPixQrCode,
-  simulateAsaasPixPayment,
+  createAsaasCheckout,
 } from './asaas.service';
 
 const baseConfig = {
@@ -150,78 +148,57 @@ describe('createAsaasCustomer', () => {
   });
 });
 
-describe('createAsaasPixCharge', () => {
-  it('cria a cobrança e retorna id + invoiceUrl', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ id: 'pay_123', invoiceUrl: 'https://asaas.test/i/pay_123' }),
-    }) as any;
-
-    const result = await createAsaasPixCharge(config, {
-      customerId: 'cus_123',
-      value: 100,
-      description: 'Pedido #1',
-    });
-
-    expect(result).toEqual({
-      ok: true,
-      data: { id: 'pay_123', invoiceUrl: 'https://asaas.test/i/pay_123' },
-    });
-  });
-});
-
-describe('getAsaasPixQrCode', () => {
-  it('retorna o QR code e o copia-e-cola', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        encodedImage: 'base64-png',
-        payload: '00020126...copia-cola',
-        expirationDate: '2026-09-13 12:00:00',
-      }),
-    }) as any;
-
-    const result = await getAsaasPixQrCode(config, 'pay_123');
-
-    expect(result).toEqual({
-      ok: true,
-      data: {
-        encodedImage: 'base64-png',
-        payload: '00020126...copia-cola',
-        expirationDate: '2026-09-13 12:00:00',
-      },
-    });
-  });
-
-  it('mapeia timeout para ASAAS_TIMEOUT', async () => {
-    global.fetch = vi.fn().mockRejectedValue(new DOMException('timeout', 'TimeoutError')) as any;
-    const result = await getAsaasPixQrCode(config, 'pay_123');
-    expect(result).toEqual({ ok: false, code: 'ASAAS_TIMEOUT', status: 504 });
-  });
-});
-
-describe('simulateAsaasPixPayment', () => {
-  it('chama o endpoint sandbox de confirmação e retorna o status atualizado', async () => {
+describe('createAsaasCheckout', () => {
+  it('cria o checkout hospedado e retorna id + link', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ status: 'RECEIVED' }),
+      json: async () => ({ id: 'chk_123', link: 'https://sandbox.asaas.com/checkoutSession/show/chk_123' }),
     });
     global.fetch = fetchMock as any;
 
-    const result = await simulateAsaasPixPayment(config, 'pay_123');
+    const result = await createAsaasCheckout(config, {
+      customerId: 'cus_123',
+      externalReference: 'abc123def4',
+      value: 100,
+      description: 'Pedido #1',
+      successUrl: 'https://loja.example.com/pedidos/abc123def4',
+      cancelUrl: 'https://loja.example.com/checkout',
+      expiredUrl: 'https://loja.example.com/checkout',
+    });
 
-    expect(result).toEqual({ ok: true, data: { status: 'RECEIVED' } });
+    expect(result).toEqual({
+      ok: true,
+      data: { id: 'chk_123', link: 'https://sandbox.asaas.com/checkoutSession/show/chk_123' },
+    });
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://api-sandbox.asaas.com/v3/sandbox/payment/pay_123/confirm');
-    expect(init.method).toBe('POST');
+    expect(url).toBe('https://api-sandbox.asaas.com/v3/checkouts');
+    const sentBody = JSON.parse(init.body);
+    expect(sentBody).toEqual({
+      billingTypes: ['PIX'],
+      chargeTypes: ['DETACHED'],
+      customer: 'cus_123',
+      externalReference: 'abc123def4',
+      callback: {
+        successUrl: 'https://loja.example.com/pedidos/abc123def4',
+        cancelUrl: 'https://loja.example.com/checkout',
+        expiredUrl: 'https://loja.example.com/checkout',
+      },
+      items: [{ name: 'Pedido #1', quantity: 1, value: 100 }],
+    });
   });
 
   it('mapeia falha para ASAAS_UNAVAILABLE', async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }) as any;
-    const result = await simulateAsaasPixPayment(config, 'pay_123');
+    const result = await createAsaasCheckout(config, {
+      customerId: 'cus_123',
+      externalReference: 'abc123def4',
+      value: 100,
+      description: 'Pedido #1',
+      successUrl: 'https://loja.example.com/pedidos/abc123def4',
+      cancelUrl: 'https://loja.example.com/checkout',
+      expiredUrl: 'https://loja.example.com/checkout',
+    });
     expect(result).toEqual({ ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 });
   });
 });

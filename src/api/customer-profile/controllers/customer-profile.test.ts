@@ -1,4 +1,3 @@
-// src/api/customer-profile/controllers/customer-profile.test.ts
 import { describe, expect, it, vi } from 'vitest';
 import controller from './customer-profile';
 

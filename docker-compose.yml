@@ -57,6 +57,7 @@ services:
       ASAAS_USER_AGENT: ${ASAAS_USER_AGENT:-Valhalla-Ecommerce/1.0 (Strapi; sandbox)}
       ASAAS_TEST_TOKEN: ${ASAAS_TEST_TOKEN:-}
       ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
+      CHECKOUT_PUBLIC_URL: ${CHECKOUT_PUBLIC_URL:-}
     volumes:
       - strapi-uploads:/opt/app/public/uploads
     ports:

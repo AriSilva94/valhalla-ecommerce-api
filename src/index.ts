@@ -6,8 +6,6 @@ import { backfillCategoryOrder } from './utils/category-order-backfill';
 import { rewriteStrapiMediaFiles } from './utils/media-cdn-rewrite';
 import { registerProductAutofill } from './utils/product-autofill-middleware';
 
-// Content types the frontend reads without auth. Grant these to the Public role
-// on every boot so a fresh database (e.g. a new Postgres deploy) serves the API.
 const PUBLIC_READ: Record<string, string[]> = {
   'api::homepage.homepage': ['find'],
   'api::site-setting.site-setting': ['find'],
@@ -21,7 +19,7 @@ const PUBLIC_READ: Record<string, string[]> = {
 
 const AUTHENTICATED_ACTIONS: Record<string, string[]> = {
   'api::customer-profile.customer-profile': ['me', 'updateMe'],
-  'api::order.order': ['create', 'find', 'findOne', 'simulatePayment'],
+  'api::order.order': ['create', 'find', 'findOne'],
 };
 
 export default {

@@ -40,11 +40,6 @@ export function buildGoogleProvider(
     key: credentials.clientId,
     secret: credentials.clientSecret,
     callback: `${trimTrailingSlash(frontendUrl)}/api/auth/google/callback`,
-    // Without this, Google silently re-authenticates whoever is already
-    // signed into it in the browser — our own logout only clears this
-    // app's session, never Google's, so "Entrar com Google" after a
-    // logout skips straight past the account picker. `select_account`
-    // forces that screen every time, regardless of Google's own session.
     custom_params: { prompt: 'select_account' },
   };
 }

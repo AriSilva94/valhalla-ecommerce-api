@@ -15,16 +15,6 @@ export interface CategoryOrderPatch {
   sortOrder: number;
 }
 
-// A ordenação das categorias é do plugin sortable-entries, que grava posições em
-// `sortOrder` **a partir de zero**. Este util faz uma coisa só: herdar o valor do
-// campo `order` antigo em bases que ainda não passaram pela migração.
-//
-// Deliberadamente NÃO renumera nem desempata:
-//   - `sortOrder` já preenchido (inclusive 0) é posição válida do plugin — tratar
-//     0 como vazio joga a primeira categoria para o fim no boot seguinte;
-//   - categoria sem posição fica para o plugin colocar no fim, como ele faz;
-//   - empate herdado do campo manual continua empatado — o front desempata por
-//     nome e o admin resolve arrastando.
 export function planLegacyOrderCopy(categories: CategoryOrderRow[]): CategoryOrderPatch[] {
   return categories
     .filter((c) => typeof c.sortOrder !== 'number' && typeof c.order === 'number')

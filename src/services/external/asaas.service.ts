@@ -1,12 +1,3 @@
-/**
- * Pure, testable service that checks server-side connectivity to Asaas
- * (payment provider) Sandbox without creating/mutating any resource.
- *
- * Follows the same pattern as src/auth/config.ts: pure functions that take
- * config as arguments (no direct `process.env` reads inside the logic), so
- * they can be unit-tested without a Strapi runtime.
- */
-
 export type AsaasErrorCode =
   | 'ASAAS_AUTH_FAILED'
   | 'ASAAS_FORBIDDEN'
@@ -30,12 +21,6 @@ const AUTH_FAILED_RESULT: AsaasTestResult = {
   status: 502,
 };
 
-/**
- * Tests connectivity to Asaas by issuing a single read-only request
- * (`GET /customers?limit=1`). Never creates or mutates any Asaas resource.
- *
- * Fails closed: an absent/empty API key never reaches `fetch`.
- */
 export async function testAsaasConnection(config: AsaasConfig): Promise<AsaasTestResult> {
   const { apiUrl, apiKey, timeoutMs, userAgent } = config;
 
@@ -76,20 +61,10 @@ export async function testAsaasConnection(config: AsaasConfig): Promise<AsaasTes
   }
 }
 
-/**
- * `AbortSignal.timeout()` (used above) only ever produces a `DOMException`
- * with name `TimeoutError` (or `AbortError` if aborted for another reason)
- * on Node 20+, so there is no other timeout-signaling path in this file to
- * account for.
- */
 function isTimeoutError(error: unknown): boolean {
   return error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError');
 }
 
-/**
- * Thin wrapper that reads env at the call site (kept separate from the pure
- * logic above so the logic itself stays trivially unit-testable).
- */
 export function readAsaasConfigFromEnv(): AsaasConfig {
   return {
     apiUrl: process.env.ASAAS_API_URL || 'https://api-sandbox.asaas.com/v3',
@@ -158,7 +133,6 @@ export type AsaasCustomerInput = {
   province: string;
 };
 
-/** Cria um cliente na Asaas. Chamar só quando `customer-profile.asaasCustomerId` ainda não existir. */
 export async function createAsaasCustomer(
   config: AsaasConfig,
   input: AsaasCustomerInput
@@ -169,54 +143,33 @@ export async function createAsaasCustomer(
   });
 }
 
-export type AsaasPixChargeInput = {
+export type AsaasCheckoutInput = {
   customerId: string;
+  externalReference: string;
   value: number;
   description: string;
+  successUrl: string;
+  cancelUrl: string;
+  expiredUrl: string;
 };
 
-/** Cria uma cobrança Pix com vencimento hoje (Pix não expira por `dueDate`, mas pelo próprio QR code). */
-export async function createAsaasPixCharge(
+export async function createAsaasCheckout(
   config: AsaasConfig,
-  input: AsaasPixChargeInput
-): Promise<AsaasApiResult<{ id: string; invoiceUrl: string }>> {
-  const dueDate = new Date().toISOString().slice(0, 10);
-  return asaasRequest<{ id: string; invoiceUrl: string }>(config, '/payments', {
+  input: AsaasCheckoutInput
+): Promise<AsaasApiResult<{ id: string; link: string }>> {
+  return asaasRequest<{ id: string; link: string }>(config, '/checkouts', {
     method: 'POST',
     body: JSON.stringify({
+      billingTypes: ['PIX'],
+      chargeTypes: ['DETACHED'],
       customer: input.customerId,
-      billingType: 'PIX',
-      value: input.value,
-      dueDate,
-      description: input.description,
+      externalReference: input.externalReference,
+      callback: {
+        successUrl: input.successUrl,
+        cancelUrl: input.cancelUrl,
+        expiredUrl: input.expiredUrl,
+      },
+      items: [{ name: input.description, quantity: 1, value: input.value }],
     }),
   });
-}
-
-export async function getAsaasPixQrCode(
-  config: AsaasConfig,
-  paymentId: string
-): Promise<AsaasApiResult<{ encodedImage: string; payload: string; expirationDate: string }>> {
-  return asaasRequest<{ encodedImage: string; payload: string; expirationDate: string }>(
-    config,
-    `/payments/${encodeURIComponent(paymentId)}/pixQrCode`,
-    { method: 'GET' }
-  );
-}
-
-/**
- * Sandbox-only endpoint that instantly marks a pending charge as paid,
- * replacing the manual "simulate payment" click in the Asaas dashboard.
- * Does not exist against the production Asaas API — callers must gate
- * this behind an environment check (see order controller).
- */
-export async function simulateAsaasPixPayment(
-  config: AsaasConfig,
-  paymentId: string
-): Promise<AsaasApiResult<{ status: string }>> {
-  return asaasRequest<{ status: string }>(
-    config,
-    `/sandbox/payment/${encodeURIComponent(paymentId)}/confirm`,
-    { method: 'POST' }
-  );
 }

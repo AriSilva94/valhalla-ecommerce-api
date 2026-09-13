@@ -8,9 +8,7 @@ vi.mock('../../../services/external/asaas.service', () => ({
     userAgent: 'ua',
   })),
   createAsaasCustomer: vi.fn(),
-  createAsaasPixCharge: vi.fn(),
-  getAsaasPixQrCode: vi.fn(),
-  simulateAsaasPixPayment: vi.fn(),
+  createAsaasCheckout: vi.fn(),
 }));
 
 import controller from './order';
@@ -94,14 +92,10 @@ describe('order controller: create', () => {
     expect(ctx.body).toEqual({ ok: false, error: 'PROFILE_INCOMPLETE' });
   });
 
-  it('cria o pedido e a cobrança Pix com perfil e asaasCustomerId já existentes', async () => {
-    (asaas.createAsaasPixCharge as any).mockResolvedValue({
+  it('cria o pedido e o checkout Asaas com perfil e asaasCustomerId já existentes', async () => {
+    (asaas.createAsaasCheckout as any).mockResolvedValue({
       ok: true,
-      data: { id: 'pay_1', invoiceUrl: 'https://asaas.test/i/pay_1' },
-    });
-    (asaas.getAsaasPixQrCode as any).mockResolvedValue({
-      ok: true,
-      data: { encodedImage: 'b64', payload: 'copia-cola', expirationDate: '2026-09-13 00:00:00' },
+      data: { id: 'chk_1', link: 'https://sandbox.asaas.com/checkoutSession/show/chk_1' },
     });
 
     const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
@@ -110,17 +104,19 @@ describe('order controller: create', () => {
     await controller.create(ctx);
 
     expect(asaas.createAsaasCustomer).not.toHaveBeenCalled();
+    expect(asaas.createAsaasCheckout).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ customerId: 'cus_existing', externalReference: 'abc123def4' })
+    );
     expect(ctx.status).toBe(201);
     expect(ctx.body.ok).toBe(true);
-    expect(ctx.body.data.pixCopyPaste).toBe('copia-cola');
-    // The client must receive the opaque reference, never the sequential
-    // numeric row id (see serialize-order.ts).
+    expect(ctx.body.data.checkoutUrl).toBe('https://sandbox.asaas.com/checkoutSession/show/chk_1');
     expect(ctx.body.data.reference).toBe('abc123def4');
     expect(ctx.body.data.id).toBeUndefined();
   });
 
-  it('marca o pedido como failed quando a cobrança Pix falha', async () => {
-    (asaas.createAsaasPixCharge as any).mockResolvedValue({ ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 });
+  it('marca o pedido como failed quando a criação do checkout falha', async () => {
+    (asaas.createAsaasCheckout as any).mockResolvedValue({ ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 });
 
     const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
     const strapiMock = buildStrapiForCreate({ product: PRODUCT, profile: COMPLETE_PROFILE });
@@ -138,13 +134,9 @@ describe('order controller: create', () => {
 
   it('cria o customer na Asaas e persiste asaasCustomerId no perfil quando ainda não existe', async () => {
     (asaas.createAsaasCustomer as any).mockResolvedValue({ ok: true, data: { id: 'cus_new' } });
-    (asaas.createAsaasPixCharge as any).mockResolvedValue({
+    (asaas.createAsaasCheckout as any).mockResolvedValue({
       ok: true,
-      data: { id: 'pay_2', invoiceUrl: 'https://asaas.test/i/pay_2' },
-    });
-    (asaas.getAsaasPixQrCode as any).mockResolvedValue({
-      ok: true,
-      data: { encodedImage: 'b64', payload: 'copia-cola', expirationDate: '2026-09-13 00:00:00' },
+      data: { id: 'chk_2', link: 'https://sandbox.asaas.com/checkoutSession/show/chk_2' },
     });
 
     const profileWithoutCustomerId = { ...COMPLETE_PROFILE, asaasCustomerId: undefined };
@@ -179,27 +171,6 @@ describe('order controller: create', () => {
       data: { status: 'failed' },
     });
   });
-
-  it('marca o pedido como failed quando o QR code Pix falha', async () => {
-    (asaas.createAsaasPixCharge as any).mockResolvedValue({
-      ok: true,
-      data: { id: 'pay_3', invoiceUrl: 'https://asaas.test/i/pay_3' },
-    });
-    (asaas.getAsaasPixQrCode as any).mockResolvedValue({ ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 });
-
-    const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
-    const strapiMock = buildStrapiForCreate({ product: PRODUCT, profile: COMPLETE_PROFILE });
-    (globalThis as any).strapi = strapiMock;
-
-    await controller.create(ctx);
-
-    expect(ctx.status).toBe(502);
-    expect(ctx.body).toEqual({ ok: false, error: 'ASAAS_UNAVAILABLE' });
-    expect(strapiMock.db.query('api::order.order').update).toHaveBeenCalledWith({
-      where: { id: 1 },
-      data: { status: 'failed' },
-    });
-  });
 });
 
 describe('order controller: find/findOne', () => {
@@ -222,89 +193,5 @@ describe('order controller: find/findOne', () => {
     expect(findOne).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ reference: 'abc123def4', user: 1 }) })
     );
-  });
-});
-
-describe('order controller: simulatePayment', () => {
-  it('retorna 401 sem usuário', async () => {
-    const ctx = buildCtx(undefined, {}, { id: 'abc123def4' });
-    await controller.simulatePayment(ctx);
-    expect(ctx.unauthorized).toHaveBeenCalled();
-  });
-
-  it('retorna 403 SANDBOX_ONLY quando a config Asaas não é sandbox', async () => {
-    (asaas.readAsaasConfigFromEnv as any).mockReturnValueOnce({
-      apiUrl: 'https://api.asaas.com/v3',
-      apiKey: 'k',
-      timeoutMs: 1000,
-      userAgent: 'ua',
-    });
-    const ctx = buildCtx(1, {}, { id: 'abc123def4' });
-    (globalThis as any).strapi = { db: { query: () => ({ findOne: vi.fn() }) } };
-
-    await controller.simulatePayment(ctx);
-
-    expect(ctx.status).toBe(403);
-    expect(ctx.body).toEqual({ ok: false, error: 'SANDBOX_ONLY' });
-  });
-
-  it('retorna 404 quando o pedido não pertence ao usuário', async () => {
-    const ctx = buildCtx(1, {}, { id: 'abc123def4' });
-    const findOne = vi.fn().mockResolvedValue(null);
-    (globalThis as any).strapi = { db: { query: () => ({ findOne }) } };
-
-    await controller.simulatePayment(ctx);
-
-    expect(ctx.notFound).toHaveBeenCalled();
-    expect(findOne).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ reference: 'abc123def4', user: 1 }) })
-    );
-  });
-
-  it('retorna 409 ORDER_NOT_PENDING quando o pedido já não está pending', async () => {
-    const ctx = buildCtx(1, {}, { id: 'abc123def4' });
-    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'paid', asaasPaymentId: 'pay_1' });
-    (globalThis as any).strapi = { db: { query: () => ({ findOne }) } };
-
-    await controller.simulatePayment(ctx);
-
-    expect(ctx.status).toBe(409);
-    expect(ctx.body).toEqual({ ok: false, error: 'ORDER_NOT_PENDING' });
-  });
-
-  it('retorna 409 quando o pedido ainda não tem asaasPaymentId', async () => {
-    const ctx = buildCtx(1, {}, { id: 'abc123def4' });
-    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'pending', asaasPaymentId: null });
-    (globalThis as any).strapi = { db: { query: () => ({ findOne }) } };
-
-    await controller.simulatePayment(ctx);
-
-    expect(ctx.status).toBe(409);
-  });
-
-  it('chama simulateAsaasPixPayment e retorna ok:true, sem alterar o status do pedido', async () => {
-    (asaas.simulateAsaasPixPayment as any).mockResolvedValue({ ok: true, data: { status: 'RECEIVED' } });
-    const ctx = buildCtx(1, {}, { id: 'abc123def4' });
-    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'pending', asaasPaymentId: 'pay_1' });
-    const update = vi.fn();
-    (globalThis as any).strapi = { db: { query: () => ({ findOne, update }) } };
-
-    await controller.simulatePayment(ctx);
-
-    expect(asaas.simulateAsaasPixPayment).toHaveBeenCalledWith(expect.anything(), 'pay_1');
-    expect(ctx.body).toEqual({ ok: true });
-    expect(update).not.toHaveBeenCalled();
-  });
-
-  it('retorna 502 quando a Asaas falha ao confirmar', async () => {
-    (asaas.simulateAsaasPixPayment as any).mockResolvedValue({ ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 });
-    const ctx = buildCtx(1, {}, { id: 'abc123def4' });
-    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'pending', asaasPaymentId: 'pay_1' });
-    (globalThis as any).strapi = { db: { query: () => ({ findOne }) } };
-
-    await controller.simulatePayment(ctx);
-
-    expect(ctx.status).toBe(502);
-    expect(ctx.body).toEqual({ ok: false, error: 'ASAAS_UNAVAILABLE' });
   });
 });

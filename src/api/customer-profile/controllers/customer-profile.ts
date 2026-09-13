@@ -1,4 +1,3 @@
-// src/api/customer-profile/controllers/customer-profile.ts
 import type { Context } from 'koa';
 
 import { isValidCep, isValidCpfCnpj, isValidUf, onlyDigits } from '../../../customer-profile/validation';

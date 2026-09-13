@@ -38,9 +38,7 @@
       "required": true
     },
     "asaasPaymentId": { "type": "string" },
-    "asaasInvoiceUrl": { "type": "string" },
-    "pixQrCodeImage": { "type": "text" },
-    "pixCopyPaste": { "type": "text" },
-    "pixExpiration": { "type": "datetime" }
+    "asaasCheckoutId": { "type": "string" },
+    "asaasInvoiceUrl": { "type": "string" }
   }
 }
