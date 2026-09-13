@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { testAsaasConnection } from './asaas.service';
+import { testAsaasConnection, createAsaasCustomer, createAsaasPixCharge, getAsaasPixQrCode } from './asaas.service';
 
 const baseConfig = {
   apiUrl: 'https://api-sandbox.asaas.com/v3',
@@ -103,5 +103,95 @@ describe('testAsaasConnection', () => {
     const result = await testAsaasConnection(baseConfig);
 
     expect(JSON.stringify(result)).not.toContain(baseConfig.apiKey);
+  });
+});
+
+const config = {
+  apiUrl: 'https://api-sandbox.asaas.com/v3',
+  apiKey: 'test-key',
+  timeoutMs: 5000,
+  userAgent: 'Test/1.0',
+};
+
+describe('createAsaasCustomer', () => {
+  it('cria o cliente e retorna o id', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'cus_123' }),
+    }) as any;
+
+    const result = await createAsaasCustomer(config, {
+      name: 'Fulano',
+      cpfCnpj: '11144477735',
+      email: 'fulano@example.com',
+      postalCode: '01310100',
+      addressNumber: '10',
+      address: 'Rua X',
+      province: 'Centro',
+    });
+
+    expect(result).toEqual({ ok: true, data: { id: 'cus_123' } });
+  });
+
+  it('mapeia 401 para ASAAS_AUTH_FAILED', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) }) as any;
+    const result = await createAsaasCustomer(config, {
+      name: 'Fulano', cpfCnpj: '11144477735', email: 'x@x.com',
+      postalCode: '01310100', addressNumber: '10', address: 'Rua X', province: 'Centro',
+    });
+    expect(result).toEqual({ ok: false, code: 'ASAAS_AUTH_FAILED', status: 502 });
+  });
+});
+
+describe('createAsaasPixCharge', () => {
+  it('cria a cobrança e retorna id + invoiceUrl', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'pay_123', invoiceUrl: 'https://asaas.test/i/pay_123' }),
+    }) as any;
+
+    const result = await createAsaasPixCharge(config, {
+      customerId: 'cus_123',
+      value: 100,
+      description: 'Pedido #1',
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      data: { id: 'pay_123', invoiceUrl: 'https://asaas.test/i/pay_123' },
+    });
+  });
+});
+
+describe('getAsaasPixQrCode', () => {
+  it('retorna o QR code e o copia-e-cola', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        encodedImage: 'base64-png',
+        payload: '00020126...copia-cola',
+        expirationDate: '2026-09-13 12:00:00',
+      }),
+    }) as any;
+
+    const result = await getAsaasPixQrCode(config, 'pay_123');
+
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        encodedImage: 'base64-png',
+        payload: '00020126...copia-cola',
+        expirationDate: '2026-09-13 12:00:00',
+      },
+    });
+  });
+
+  it('mapeia timeout para ASAAS_TIMEOUT', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new DOMException('timeout', 'TimeoutError')) as any;
+    const result = await getAsaasPixQrCode(config, 'pay_123');
+    expect(result).toEqual({ ok: false, code: 'ASAAS_TIMEOUT', status: 504 });
   });
 });

@@ -98,3 +98,108 @@ export function readAsaasConfigFromEnv(): AsaasConfig {
     userAgent: process.env.ASAAS_USER_AGENT || 'Valhalla-Ecommerce/1.0 (Strapi; sandbox)',
   };
 }
+
+export type AsaasApiResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; code: AsaasErrorCode; status: 502 | 504 | 503 };
+
+async function asaasRequest<T>(
+  config: AsaasConfig,
+  path: string,
+  init: RequestInit
+): Promise<AsaasApiResult<T>> {
+  const { apiUrl, apiKey, timeoutMs, userAgent } = config;
+
+  if (!apiKey) {
+    return { ok: false, code: 'ASAAS_AUTH_FAILED', status: 502 };
+  }
+
+  try {
+    const response = await fetch(`${apiUrl}${path}`, {
+      ...init,
+      headers: {
+        access_token: apiKey,
+        'Content-Type': 'application/json',
+        'User-Agent': userAgent,
+        ...(init.headers as Record<string, string> | undefined),
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+
+    if (response.status === 401) {
+      return { ok: false, code: 'ASAAS_AUTH_FAILED', status: 502 };
+    }
+    if (response.status === 403) {
+      return { ok: false, code: 'ASAAS_FORBIDDEN', status: 502 };
+    }
+    if (!response.ok) {
+      return { ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 };
+    }
+
+    const json = (await response.json()) as T;
+    return { ok: true, data: json };
+  } catch (error) {
+    if (isTimeoutError(error)) {
+      return { ok: false, code: 'ASAAS_TIMEOUT', status: 504 };
+    }
+    return { ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 };
+  }
+}
+
+export type AsaasCustomerInput = {
+  name: string;
+  cpfCnpj: string;
+  email: string;
+  phone?: string;
+  postalCode: string;
+  addressNumber: string;
+  address: string;
+  complement?: string;
+  province: string;
+};
+
+/** Cria um cliente na Asaas. Chamar só quando `customer-profile.asaasCustomerId` ainda não existir. */
+export async function createAsaasCustomer(
+  config: AsaasConfig,
+  input: AsaasCustomerInput
+): Promise<AsaasApiResult<{ id: string }>> {
+  return asaasRequest<{ id: string }>(config, '/customers', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export type AsaasPixChargeInput = {
+  customerId: string;
+  value: number;
+  description: string;
+};
+
+/** Cria uma cobrança Pix com vencimento hoje (Pix não expira por `dueDate`, mas pelo próprio QR code). */
+export async function createAsaasPixCharge(
+  config: AsaasConfig,
+  input: AsaasPixChargeInput
+): Promise<AsaasApiResult<{ id: string; invoiceUrl: string }>> {
+  const dueDate = new Date().toISOString().slice(0, 10);
+  return asaasRequest<{ id: string; invoiceUrl: string }>(config, '/payments', {
+    method: 'POST',
+    body: JSON.stringify({
+      customer: input.customerId,
+      billingType: 'PIX',
+      value: input.value,
+      dueDate,
+      description: input.description,
+    }),
+  });
+}
+
+export async function getAsaasPixQrCode(
+  config: AsaasConfig,
+  paymentId: string
+): Promise<AsaasApiResult<{ encodedImage: string; payload: string; expirationDate: string }>> {
+  return asaasRequest<{ encodedImage: string; payload: string; expirationDate: string }>(
+    config,
+    `/payments/${encodeURIComponent(paymentId)}/pixQrCode`,
+    { method: 'GET' }
+  );
+}
