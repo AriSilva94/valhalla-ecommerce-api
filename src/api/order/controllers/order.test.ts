@@ -120,6 +120,75 @@ describe('order controller: create', () => {
 
     expect(ctx.status).toBe(502);
     expect(ctx.body).toEqual({ ok: false, error: 'ASAAS_UNAVAILABLE' });
+    expect(strapiMock.db.query('api::order.order').update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { status: 'failed' },
+    });
+  });
+
+  it('cria o customer na Asaas e persiste asaasCustomerId no perfil quando ainda não existe', async () => {
+    (asaas.createAsaasCustomer as any).mockResolvedValue({ ok: true, data: { id: 'cus_new' } });
+    (asaas.createAsaasPixCharge as any).mockResolvedValue({
+      ok: true,
+      data: { id: 'pay_2', invoiceUrl: 'https://asaas.test/i/pay_2' },
+    });
+    (asaas.getAsaasPixQrCode as any).mockResolvedValue({
+      ok: true,
+      data: { encodedImage: 'b64', payload: 'copia-cola', expirationDate: '2026-09-13T00:00:00.000Z' },
+    });
+
+    const profileWithoutCustomerId = { ...COMPLETE_PROFILE, asaasCustomerId: undefined };
+    const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
+    const strapiMock = buildStrapiForCreate({ product: PRODUCT, profile: profileWithoutCustomerId });
+    (globalThis as any).strapi = strapiMock;
+
+    await controller.create(ctx);
+
+    expect(asaas.createAsaasCustomer).toHaveBeenCalled();
+    expect(strapiMock.db.query('api::customer-profile.customer-profile').update).toHaveBeenCalledWith({
+      where: { id: profileWithoutCustomerId.id },
+      data: { asaasCustomerId: 'cus_new' },
+    });
+    expect(ctx.status).toBe(201);
+  });
+
+  it('marca o pedido como failed quando a criação do customer na Asaas falha', async () => {
+    (asaas.createAsaasCustomer as any).mockResolvedValue({ ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 });
+
+    const profileWithoutCustomerId = { ...COMPLETE_PROFILE, asaasCustomerId: undefined };
+    const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
+    const strapiMock = buildStrapiForCreate({ product: PRODUCT, profile: profileWithoutCustomerId });
+    (globalThis as any).strapi = strapiMock;
+
+    await controller.create(ctx);
+
+    expect(ctx.status).toBe(502);
+    expect(ctx.body).toEqual({ ok: false, error: 'ASAAS_UNAVAILABLE' });
+    expect(strapiMock.db.query('api::order.order').update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { status: 'failed' },
+    });
+  });
+
+  it('marca o pedido como failed quando o QR code Pix falha', async () => {
+    (asaas.createAsaasPixCharge as any).mockResolvedValue({
+      ok: true,
+      data: { id: 'pay_3', invoiceUrl: 'https://asaas.test/i/pay_3' },
+    });
+    (asaas.getAsaasPixQrCode as any).mockResolvedValue({ ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 });
+
+    const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
+    const strapiMock = buildStrapiForCreate({ product: PRODUCT, profile: COMPLETE_PROFILE });
+    (globalThis as any).strapi = strapiMock;
+
+    await controller.create(ctx);
+
+    expect(ctx.status).toBe(502);
+    expect(ctx.body).toEqual({ ok: false, error: 'ASAAS_UNAVAILABLE' });
+    expect(strapiMock.db.query('api::order.order').update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { status: 'failed' },
+    });
   });
 });
 
@@ -136,8 +205,12 @@ describe('order controller: find/findOne', () => {
 
   it('findOne retorna 404 quando o pedido não pertence ao usuário', async () => {
     const ctx = buildCtx(1, {}, { id: '99' });
-    (globalThis as any).strapi = { db: { query: () => ({ findOne: vi.fn().mockResolvedValue(null) }) } };
+    const findOne = vi.fn().mockResolvedValue(null);
+    (globalThis as any).strapi = { db: { query: () => ({ findOne }) } };
     await controller.findOne(ctx);
     expect(ctx.notFound).toHaveBeenCalled();
+    expect(findOne).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: 99, user: 1 }) })
+    );
   });
 });

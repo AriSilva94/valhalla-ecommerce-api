@@ -13,7 +13,7 @@ function makeProductLookup(): ProductLookup {
   return async (productSlug: string) => {
     const product: any = await strapi.db
       .query('api::product.product')
-      .findOne({ where: { slug: productSlug }, populate: ['variants'] });
+      .findOne({ where: { slug: productSlug, publishedAt: { $notNull: true } }, populate: ['variants'] });
 
     if (!product) return null;
 
@@ -69,58 +69,62 @@ export default {
 
     const asaasConfig = readAsaasConfigFromEnv();
 
-    let asaasCustomerId: string | undefined = profile.asaasCustomerId;
-    if (!asaasCustomerId) {
-      const customerResult = await createAsaasCustomer(asaasConfig, {
-        name: user.username,
-        cpfCnpj: profile.cpfCnpj,
-        email: user.email,
-        phone: profile.phone || undefined,
-        postalCode: profile.postalCode,
-        addressNumber: profile.addressNumber,
-        address: profile.addressLine,
-        complement: profile.addressComplement || undefined,
-        province: profile.neighborhood,
-      });
+    try {
+      let asaasCustomerId: string | undefined = profile.asaasCustomerId;
+      if (!asaasCustomerId) {
+        const customerResult = await createAsaasCustomer(asaasConfig, {
+          name: user.username,
+          cpfCnpj: profile.cpfCnpj,
+          email: user.email,
+          phone: profile.phone || undefined,
+          postalCode: profile.postalCode,
+          addressNumber: profile.addressNumber,
+          address: profile.addressLine,
+          complement: profile.addressComplement || undefined,
+          province: profile.neighborhood,
+        });
 
-      if (!customerResult.ok) {
-        return failOrder(order.id, 'ASAAS_UNAVAILABLE', 502, ctx);
+        if (!customerResult.ok) {
+          return await failOrder(order.id, 'ASAAS_UNAVAILABLE', 502, ctx);
+        }
+
+        asaasCustomerId = customerResult.data.id;
+        await strapi.db
+          .query('api::customer-profile.customer-profile')
+          .update({ where: { id: profile.id }, data: { asaasCustomerId } });
       }
 
-      asaasCustomerId = customerResult.data.id;
-      await strapi.db
-        .query('api::customer-profile.customer-profile')
-        .update({ where: { id: profile.id }, data: { asaasCustomerId } });
+      const chargeResult = await createAsaasPixCharge(asaasConfig, {
+        customerId: asaasCustomerId,
+        value: pricing.totalAmount,
+        description: `Pedido #${order.id} - Valhalla Tecnologia`,
+      });
+
+      if (!chargeResult.ok) {
+        return await failOrder(order.id, 'ASAAS_UNAVAILABLE', 502, ctx);
+      }
+
+      const qrResult = await getAsaasPixQrCode(asaasConfig, chargeResult.data.id);
+      if (!qrResult.ok) {
+        return await failOrder(order.id, 'ASAAS_UNAVAILABLE', 502, ctx);
+      }
+
+      const updated: OrderRecord = await strapi.db.query('api::order.order').update({
+        where: { id: order.id },
+        data: {
+          asaasPaymentId: chargeResult.data.id,
+          asaasInvoiceUrl: chargeResult.data.invoiceUrl,
+          pixQrCodeImage: qrResult.data.encodedImage,
+          pixCopyPaste: qrResult.data.payload,
+          pixExpiration: qrResult.data.expirationDate,
+        },
+      });
+
+      ctx.status = 201;
+      ctx.body = { ok: true, data: serializeOrder(updated) };
+    } catch {
+      return await failOrder(order.id, 'ASAAS_UNAVAILABLE', 502, ctx);
     }
-
-    const chargeResult = await createAsaasPixCharge(asaasConfig, {
-      customerId: asaasCustomerId,
-      value: pricing.totalAmount,
-      description: `Pedido #${order.id} - Valhalla Tecnologia`,
-    });
-
-    if (!chargeResult.ok) {
-      return failOrder(order.id, 'ASAAS_UNAVAILABLE', 502, ctx);
-    }
-
-    const qrResult = await getAsaasPixQrCode(asaasConfig, chargeResult.data.id);
-    if (!qrResult.ok) {
-      return failOrder(order.id, 'ASAAS_UNAVAILABLE', 502, ctx);
-    }
-
-    const updated: OrderRecord = await strapi.db.query('api::order.order').update({
-      where: { id: order.id },
-      data: {
-        asaasPaymentId: chargeResult.data.id,
-        asaasInvoiceUrl: chargeResult.data.invoiceUrl,
-        pixQrCodeImage: qrResult.data.encodedImage,
-        pixCopyPaste: qrResult.data.payload,
-        pixExpiration: qrResult.data.expirationDate,
-      },
-    });
-
-    ctx.status = 201;
-    ctx.body = { ok: true, data: serializeOrder(updated) };
   },
 
   async find(ctx: Context) {
