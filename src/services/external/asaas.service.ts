@@ -203,3 +203,20 @@ export async function getAsaasPixQrCode(
     { method: 'GET' }
   );
 }
+
+/**
+ * Sandbox-only endpoint that instantly marks a pending charge as paid,
+ * replacing the manual "simulate payment" click in the Asaas dashboard.
+ * Does not exist against the production Asaas API — callers must gate
+ * this behind an environment check (see order controller).
+ */
+export async function simulateAsaasPixPayment(
+  config: AsaasConfig,
+  paymentId: string
+): Promise<AsaasApiResult<{ status: string }>> {
+  return asaasRequest<{ status: string }>(
+    config,
+    `/sandbox/payment/${encodeURIComponent(paymentId)}/confirm`,
+    { method: 'POST' }
+  );
+}

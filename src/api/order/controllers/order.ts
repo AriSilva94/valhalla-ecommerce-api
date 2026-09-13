@@ -10,7 +10,15 @@ import {
   createAsaasPixCharge,
   getAsaasPixQrCode,
   readAsaasConfigFromEnv,
+  simulateAsaasPixPayment,
 } from '../../../services/external/asaas.service';
+
+// Refuses to run against a production Asaas API key — the sandbox confirm
+// endpoint this gates doesn't exist there anyway, but this is the
+// authoritative check, not the endpoint 404ing.
+function isSandboxAsaasConfig(apiUrl: string): boolean {
+  return apiUrl.includes('sandbox');
+}
 
 function makeProductLookup(): ProductLookup {
   return async (productSlug: string) => {
@@ -166,5 +174,44 @@ export default {
     if (!order) return ctx.notFound();
 
     ctx.body = { ok: true, data: serializeOrder(order) };
+  },
+
+  // Sandbox-only: replaces the manual "simulate payment" click in the Asaas
+  // dashboard. Never touches order.status itself — Asaas fires the same
+  // PAYMENT_RECEIVED webhook it would for a real payment, and the existing
+  // webhook handler (src/api/asaas/controllers/asaas.ts) applies the
+  // status change exactly as it does today.
+  async simulatePayment(ctx: Context) {
+    const userId = ctx.state.user?.id;
+    if (!userId) return ctx.unauthorized();
+
+    const asaasConfig = readAsaasConfigFromEnv();
+    if (!isSandboxAsaasConfig(asaasConfig.apiUrl)) {
+      ctx.status = 403;
+      ctx.body = { ok: false, error: 'SANDBOX_ONLY' };
+      return;
+    }
+
+    const reference = ctx.params.id;
+    const order: OrderRecord | null = await strapi.db
+      .query('api::order.order')
+      .findOne({ where: { reference, user: userId } });
+
+    if (!order) return ctx.notFound();
+
+    if (order.status !== 'pending' || !order.asaasPaymentId) {
+      ctx.status = 409;
+      ctx.body = { ok: false, error: 'ORDER_NOT_PENDING' };
+      return;
+    }
+
+    const result = await simulateAsaasPixPayment(asaasConfig, order.asaasPaymentId);
+    if (!result.ok) {
+      ctx.status = 502;
+      ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
+      return;
+    }
+
+    ctx.body = { ok: true };
   },
 };

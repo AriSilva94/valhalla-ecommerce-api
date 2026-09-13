@@ -1,10 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../services/external/asaas.service', () => ({
-  readAsaasConfigFromEnv: () => ({ apiUrl: 'x', apiKey: 'k', timeoutMs: 1000, userAgent: 'ua' }),
+  readAsaasConfigFromEnv: vi.fn(() => ({
+    apiUrl: 'https://api-sandbox.asaas.com/v3',
+    apiKey: 'k',
+    timeoutMs: 1000,
+    userAgent: 'ua',
+  })),
   createAsaasCustomer: vi.fn(),
   createAsaasPixCharge: vi.fn(),
   getAsaasPixQrCode: vi.fn(),
+  simulateAsaasPixPayment: vi.fn(),
 }));
 
 import controller from './order';
@@ -216,5 +222,89 @@ describe('order controller: find/findOne', () => {
     expect(findOne).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ reference: 'abc123def4', user: 1 }) })
     );
+  });
+});
+
+describe('order controller: simulatePayment', () => {
+  it('retorna 401 sem usuário', async () => {
+    const ctx = buildCtx(undefined, {}, { id: 'abc123def4' });
+    await controller.simulatePayment(ctx);
+    expect(ctx.unauthorized).toHaveBeenCalled();
+  });
+
+  it('retorna 403 SANDBOX_ONLY quando a config Asaas não é sandbox', async () => {
+    (asaas.readAsaasConfigFromEnv as any).mockReturnValueOnce({
+      apiUrl: 'https://api.asaas.com/v3',
+      apiKey: 'k',
+      timeoutMs: 1000,
+      userAgent: 'ua',
+    });
+    const ctx = buildCtx(1, {}, { id: 'abc123def4' });
+    (globalThis as any).strapi = { db: { query: () => ({ findOne: vi.fn() }) } };
+
+    await controller.simulatePayment(ctx);
+
+    expect(ctx.status).toBe(403);
+    expect(ctx.body).toEqual({ ok: false, error: 'SANDBOX_ONLY' });
+  });
+
+  it('retorna 404 quando o pedido não pertence ao usuário', async () => {
+    const ctx = buildCtx(1, {}, { id: 'abc123def4' });
+    const findOne = vi.fn().mockResolvedValue(null);
+    (globalThis as any).strapi = { db: { query: () => ({ findOne }) } };
+
+    await controller.simulatePayment(ctx);
+
+    expect(ctx.notFound).toHaveBeenCalled();
+    expect(findOne).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ reference: 'abc123def4', user: 1 }) })
+    );
+  });
+
+  it('retorna 409 ORDER_NOT_PENDING quando o pedido já não está pending', async () => {
+    const ctx = buildCtx(1, {}, { id: 'abc123def4' });
+    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'paid', asaasPaymentId: 'pay_1' });
+    (globalThis as any).strapi = { db: { query: () => ({ findOne }) } };
+
+    await controller.simulatePayment(ctx);
+
+    expect(ctx.status).toBe(409);
+    expect(ctx.body).toEqual({ ok: false, error: 'ORDER_NOT_PENDING' });
+  });
+
+  it('retorna 409 quando o pedido ainda não tem asaasPaymentId', async () => {
+    const ctx = buildCtx(1, {}, { id: 'abc123def4' });
+    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'pending', asaasPaymentId: null });
+    (globalThis as any).strapi = { db: { query: () => ({ findOne }) } };
+
+    await controller.simulatePayment(ctx);
+
+    expect(ctx.status).toBe(409);
+  });
+
+  it('chama simulateAsaasPixPayment e retorna ok:true, sem alterar o status do pedido', async () => {
+    (asaas.simulateAsaasPixPayment as any).mockResolvedValue({ ok: true, data: { status: 'RECEIVED' } });
+    const ctx = buildCtx(1, {}, { id: 'abc123def4' });
+    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'pending', asaasPaymentId: 'pay_1' });
+    const update = vi.fn();
+    (globalThis as any).strapi = { db: { query: () => ({ findOne, update }) } };
+
+    await controller.simulatePayment(ctx);
+
+    expect(asaas.simulateAsaasPixPayment).toHaveBeenCalledWith(expect.anything(), 'pay_1');
+    expect(ctx.body).toEqual({ ok: true });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('retorna 502 quando a Asaas falha ao confirmar', async () => {
+    (asaas.simulateAsaasPixPayment as any).mockResolvedValue({ ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 });
+    const ctx = buildCtx(1, {}, { id: 'abc123def4' });
+    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'pending', asaasPaymentId: 'pay_1' });
+    (globalThis as any).strapi = { db: { query: () => ({ findOne }) } };
+
+    await controller.simulatePayment(ctx);
+
+    expect(ctx.status).toBe(502);
+    expect(ctx.body).toEqual({ ok: false, error: 'ASAAS_UNAVAILABLE' });
   });
 });
