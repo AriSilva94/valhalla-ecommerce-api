@@ -33,6 +33,7 @@ describe('buildGoogleProvider', () => {
       key: 'client-id',
       secret: 'client-secret',
       callback: 'https://loja.example.com/api/auth/google/callback',
+      custom_params: { prompt: 'select_account' },
     });
   });
 });
