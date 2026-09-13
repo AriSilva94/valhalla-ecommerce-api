@@ -19,6 +19,10 @@ const PUBLIC_READ: Record<string, string[]> = {
   'api::policy.policy': ['find', 'findOne'],
 };
 
+const AUTHENTICATED_ACTIONS: Record<string, string[]> = {
+  'api::customer-profile.customer-profile': ['me', 'updateMe'],
+};
+
 export default {
   register({ strapi }: { strapi: Core.Strapi }) {
     registerProductAutofill(strapi);
@@ -60,6 +64,27 @@ export default {
           if (!existing) {
             await strapi.db.query('plugin::users-permissions.permission').create({
               data: { action: actionId, role: publicRole.id },
+            });
+          }
+        }
+      }
+    }
+
+    const authenticatedRole = await strapi.db
+      .query('plugin::users-permissions.role')
+      .findOne({ where: { type: 'authenticated' } });
+
+    if (authenticatedRole) {
+      for (const [uid, actions] of Object.entries(AUTHENTICATED_ACTIONS)) {
+        for (const action of actions) {
+          const actionId = `${uid}.${action}`;
+          const existing = await strapi.db
+            .query('plugin::users-permissions.permission')
+            .findOne({ where: { action: actionId, role: authenticatedRole.id } });
+
+          if (!existing) {
+            await strapi.db.query('plugin::users-permissions.permission').create({
+              data: { action: actionId, role: authenticatedRole.id },
             });
           }
         }

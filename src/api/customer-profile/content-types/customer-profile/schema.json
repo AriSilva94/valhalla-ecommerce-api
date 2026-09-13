@@ -1,0 +1,31 @@
+{
+  "kind": "collectionType",
+  "collectionName": "customer_profiles",
+  "info": {
+    "singularName": "customer-profile",
+    "pluralName": "customer-profiles",
+    "displayName": "Perfil do Cliente",
+    "description": "CPF/CNPJ, endereço e id Asaas do cliente autenticado"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "user": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "cpfCnpj": { "type": "string" },
+    "phone": { "type": "string" },
+    "addressLine": { "type": "string" },
+    "addressNumber": { "type": "string" },
+    "addressComplement": { "type": "string" },
+    "neighborhood": { "type": "string" },
+    "city": { "type": "string" },
+    "state": { "type": "string" },
+    "postalCode": { "type": "string" },
+    "asaasCustomerId": { "type": "string" }
+  }
+}
