@@ -17,6 +17,12 @@
       "relation": "manyToOne",
       "target": "plugin::users-permissions.user"
     },
+    "reference": {
+      "type": "string",
+      "required": true,
+      "unique": true,
+      "private": true
+    },
     "items": {
       "type": "json",
       "required": true

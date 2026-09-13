@@ -4,6 +4,7 @@ export type OrderStatus = 'pending' | 'paid' | 'expired' | 'cancelled' | 'failed
 
 export type OrderRecord = {
   id: number;
+  reference: string;
   items: OrderItem[];
   totalAmount: number;
   status: OrderStatus;
@@ -16,7 +17,7 @@ export type OrderRecord = {
 };
 
 export type SerializedOrder = {
-  id: number;
+  reference: string;
   items: OrderItem[];
   totalAmount: number;
   status: OrderStatus;
@@ -27,9 +28,14 @@ export type SerializedOrder = {
   createdAt: string;
 };
 
+// The client never sees the row's numeric `id` — it's sequential across
+// every order in the database, so exposing it (even scoped to "your own
+// orders") would let any customer infer the store's total order volume
+// from the gaps between their own order numbers. `reference` is an opaque,
+// randomly generated public identifier instead (see order controller).
 export function serializeOrder(order: OrderRecord): SerializedOrder {
   return {
-    id: order.id,
+    reference: order.reference,
     items: order.items,
     totalAmount: order.totalAmount,
     status: order.status,

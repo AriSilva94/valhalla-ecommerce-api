@@ -38,8 +38,8 @@ function buildStrapiForCreate(opts: {
       findOne: vi.fn().mockResolvedValue(opts.user ?? { id: 1, username: 'joe', email: 'joe@example.com' }),
     },
     'api::order.order': {
-      create: vi.fn().mockResolvedValue(opts.order ?? { id: 1, createdAt: '2026-09-12T10:00:00.000Z' }),
-      update: vi.fn().mockImplementation(async ({ data }: any) => ({ id: 1, createdAt: '2026-09-12T10:00:00.000Z', ...data })),
+      create: vi.fn().mockResolvedValue(opts.order ?? { id: 1, reference: 'abc123def4', createdAt: '2026-09-12T10:00:00.000Z' }),
+      update: vi.fn().mockImplementation(async ({ data }: any) => ({ id: 1, reference: 'abc123def4', createdAt: '2026-09-12T10:00:00.000Z', ...data })),
       findMany: vi.fn().mockResolvedValue([]),
       findOne: vi.fn().mockResolvedValue(null),
     },
@@ -107,6 +107,10 @@ describe('order controller: create', () => {
     expect(ctx.status).toBe(201);
     expect(ctx.body.ok).toBe(true);
     expect(ctx.body.data.pixCopyPaste).toBe('copia-cola');
+    // The client must receive the opaque reference, never the sequential
+    // numeric row id (see serialize-order.ts).
+    expect(ctx.body.data.reference).toBe('abc123def4');
+    expect(ctx.body.data.id).toBeUndefined();
   });
 
   it('marca o pedido como failed quando a cobrança Pix falha', async () => {
@@ -203,14 +207,14 @@ describe('order controller: find/findOne', () => {
     );
   });
 
-  it('findOne retorna 404 quando o pedido não pertence ao usuário', async () => {
-    const ctx = buildCtx(1, {}, { id: '99' });
+  it('findOne busca pelo reference opaco, não pelo id sequencial, e retorna 404 se não achar', async () => {
+    const ctx = buildCtx(1, {}, { id: 'abc123def4' });
     const findOne = vi.fn().mockResolvedValue(null);
     (globalThis as any).strapi = { db: { query: () => ({ findOne }) } };
     await controller.findOne(ctx);
     expect(ctx.notFound).toHaveBeenCalled();
     expect(findOne).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ id: 99, user: 1 }) })
+      expect.objectContaining({ where: expect.objectContaining({ reference: 'abc123def4', user: 1 }) })
     );
   });
 });

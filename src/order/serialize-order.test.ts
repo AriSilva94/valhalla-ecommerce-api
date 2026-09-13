@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { serializeOrder } from './serialize-order';
 
 describe('serializeOrder', () => {
-  it('expõe os campos públicos e nunca asaasPaymentId', () => {
+  it('expõe os campos públicos, nunca asaasPaymentId, e nunca o id sequencial (só reference)', () => {
     const result = serializeOrder({
       id: 1,
+      reference: 'abc123def4',
       items: [{ productSlug: 'x', productName: 'X', variantSku: 'S', colorName: 'C', configLabel: 'L', unitPrice: 10, qty: 2 }],
       totalAmount: 20,
       status: 'pending',
@@ -17,7 +18,7 @@ describe('serializeOrder', () => {
     });
 
     expect(result).toEqual({
-      id: 1,
+      reference: 'abc123def4',
       items: [{ productSlug: 'x', productName: 'X', variantSku: 'S', colorName: 'C', configLabel: 'L', unitPrice: 10, qty: 2 }],
       totalAmount: 20,
       status: 'pending',
@@ -28,5 +29,6 @@ describe('serializeOrder', () => {
       createdAt: '2026-09-12T10:00:00.000Z',
     });
     expect((result as any).asaasPaymentId).toBeUndefined();
+    expect((result as any).id).toBeUndefined();
   });
 });

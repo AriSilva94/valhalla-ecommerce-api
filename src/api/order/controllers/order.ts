@@ -1,3 +1,5 @@
+import { randomBytes } from 'crypto';
+
 import type { Context } from 'koa';
 
 import { resolveOrderItems, type ProductLookup } from '../../../order/pricing';
@@ -29,6 +31,13 @@ function makeProductLookup(): ProductLookup {
       })),
     };
   };
+}
+
+// Opaque, non-sequential public identifier — never the row's numeric id
+// (see serialize-order.ts for why). 10 hex chars (40 bits) is unguessable
+// enough for an order lookup gated behind the owning user's session anyway.
+function generateOrderReference(): string {
+  return randomBytes(5).toString('hex');
 }
 
 async function failOrder(orderId: number, code: string, status: number, ctx: Context) {
@@ -65,7 +74,13 @@ export default {
       .findOne({ where: { id: userId } });
 
     const order: OrderRecord = await strapi.db.query('api::order.order').create({
-      data: { user: userId, items: pricing.items, totalAmount: pricing.totalAmount, status: 'pending' },
+      data: {
+        user: userId,
+        reference: generateOrderReference(),
+        items: pricing.items,
+        totalAmount: pricing.totalAmount,
+        status: 'pending',
+      },
     });
 
     const asaasConfig = readAsaasConfigFromEnv();
@@ -143,10 +158,10 @@ export default {
     const userId = ctx.state.user?.id;
     if (!userId) return ctx.unauthorized();
 
-    const id = Number(ctx.params.id);
+    const reference = ctx.params.id;
     const order: OrderRecord | null = await strapi.db
       .query('api::order.order')
-      .findOne({ where: { id, user: userId } });
+      .findOne({ where: { reference, user: userId } });
 
     if (!order) return ctx.notFound();
 
