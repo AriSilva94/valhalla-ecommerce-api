@@ -38,7 +38,19 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Middlewar
     'strapi::poweredBy',
     'strapi::query',
     'strapi::body',
-    'strapi::session',
+    // strapi::session (used by the users-permissions Google OAuth "connect"
+    // flow) defaults `secure` to `NODE_ENV === 'production'`, which is
+    // always true here — including local Docker testing over plain HTTP,
+    // where the browser then silently drops the cookie and the connect
+    // flow throws "Cannot send secure cookie over unencrypted connection".
+    // Reuse the same signal server.ts already uses for "are we actually
+    // behind an HTTPS-terminating proxy" (IS_PROXIED) instead of NODE_ENV.
+    {
+      name: 'strapi::session',
+      config: {
+        secure: env.bool('IS_PROXIED', false),
+      },
+    },
     'strapi::favicon',
     'strapi::public',
   ];
