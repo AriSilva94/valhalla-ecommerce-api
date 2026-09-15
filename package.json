@@ -11,6 +11,7 @@
     "develop": "strapi develop",
     "db:migrate:order-idempotency": "node database/migrations/20260915-backfill-order-idempotency-key.js",
     "db:migrate:checkout-recovery": "node database/migrations/20260915-add-order-checkout-recovery-status.js",
+    "db:migrate:order-indexes": "node database/migrations/20260915-add-order-read-indexes.js",
     "import:media": "node ./scripts/import-media.js",
     "media:rewrite-urls": "node ./scripts/rewrite-media-urls.js",
     "media:validate-cdn": "node ./scripts/validate-media-cdn.js",
