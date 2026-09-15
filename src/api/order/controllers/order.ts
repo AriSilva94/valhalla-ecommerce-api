@@ -486,11 +486,16 @@ export default {
     const userId = ctx.state.user?.id;
     if (!userId) return ctx.unauthorized();
 
+    const rawPage = Number(ctx.request.query?.page ?? 1);
+    const rawPageSize = Number(ctx.request.query?.pageSize ?? 20);
+    const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+    const pageSize = Number.isInteger(rawPageSize) && rawPageSize > 0 ? Math.min(rawPageSize, 100) : 20;
+
     const orders: OrderRecord[] = await strapi.db
       .query('api::order.order')
-      .findMany({ where: { user: userId }, orderBy: { createdAt: 'desc' } });
+      .findMany({ where: { user: userId }, orderBy: { createdAt: 'desc' }, limit: pageSize, offset: (page - 1) * pageSize });
 
-    ctx.body = { ok: true, data: orders.map(serializeOrder) };
+    ctx.body = { ok: true, data: orders.map(serializeOrder), meta: { pagination: { page, pageSize, hasMore: orders.length === pageSize } } };
   },
 
   async findOne(ctx: Context) {
