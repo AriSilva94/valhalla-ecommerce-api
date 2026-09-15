@@ -84,6 +84,10 @@ function successResponse(order: OrderRecord): OrderCreateResponse {
   return { ok: true, data: serializeOrder(order) };
 }
 
+function hasCompletedAsaasCheckout(order: OrderRecord): boolean {
+  return Boolean(order.asaasCheckoutId && order.asaasInvoiceUrl);
+}
+
 async function failOrder(orderId: number, code: string, status: number, ctx: Context) {
   await strapi.db.query('api::order.order').update({ where: { id: orderId }, data: { status: 'failed' } });
   ctx.status = status;
@@ -125,6 +129,16 @@ export default {
 
       if (existingOrder) {
         if (existingOrder.status === 'failed') {
+          ctx.status = 502;
+          ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
+          return;
+        }
+
+        if (!hasCompletedAsaasCheckout(existingOrder)) {
+          if (existingOrder.status === 'pending') {
+            return await failOrder(existingOrder.id, 'ASAAS_UNAVAILABLE', 502, ctx);
+          }
+
           ctx.status = 502;
           ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
           return;
@@ -184,6 +198,16 @@ export default {
         }
 
         if (duplicateOrder.status === 'failed') {
+          ctx.status = 502;
+          ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
+          return;
+        }
+
+        if (!hasCompletedAsaasCheckout(duplicateOrder)) {
+          if (duplicateOrder.status === 'pending') {
+            return await failOrder(duplicateOrder.id, 'ASAAS_UNAVAILABLE', 502, ctx);
+          }
+
           ctx.status = 502;
           ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
           return;
