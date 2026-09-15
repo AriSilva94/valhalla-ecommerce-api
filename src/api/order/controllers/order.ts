@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 
 import type { Context } from 'koa';
 
@@ -58,6 +58,7 @@ function generateOrderReference(): string {
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const INCOMPLETE_CHECKOUT_RECOVERY_AGE_MS = 10 * 60 * 1000;
 
 type OrderCreateResponse = {
   ok: true;
@@ -86,6 +87,25 @@ function successResponse(order: OrderRecord): OrderCreateResponse {
 
 function hasCompletedAsaasCheckout(order: OrderRecord): boolean {
   return Boolean(order.asaasCheckoutId && order.asaasInvoiceUrl);
+}
+
+function isRecentIncompleteCheckout(order: OrderRecord): boolean {
+  const createdAt = Date.parse(order.createdAt);
+  return Number.isNaN(createdAt) || Date.now() - createdAt < INCOMPLETE_CHECKOUT_RECOVERY_AGE_MS;
+}
+
+function logCheckoutWarning(operation: string, userId: number, idempotencyKey: string, orderId?: number): void {
+  const correlationId = createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 12);
+  const context = `operation=${operation} userId=${userId} idempotencyCorrelation=${correlationId}`;
+  const message = orderId ? `checkout ${context} orderId=${orderId}` : `checkout ${context}`;
+  const warn = strapi.log?.warn;
+
+  if (typeof warn === 'function') {
+    warn(message);
+    return;
+  }
+
+  console.warn(message);
 }
 
 async function failOrder(orderId: number, code: string, status: number, ctx: Context) {
@@ -136,7 +156,24 @@ export default {
 
         if (!hasCompletedAsaasCheckout(existingOrder)) {
           if (existingOrder.status === 'pending') {
-            return await failOrder(existingOrder.id, 'ASAAS_UNAVAILABLE', 502, ctx);
+            if (isRecentIncompleteCheckout(existingOrder)) {
+              ctx.status = 409;
+              ctx.body = { ok: false, error: 'CHECKOUT_IN_PROGRESS' };
+              return;
+            }
+
+            await orderRepository.update({
+              where: {
+                id: existingOrder.id,
+                status: 'pending',
+                asaasCheckoutId: { $null: true },
+                asaasInvoiceUrl: { $null: true },
+              },
+              data: { status: 'failed' },
+            });
+            ctx.status = 409;
+            ctx.body = { ok: false, error: 'CHECKOUT_RECOVERY_REQUIRED' };
+            return;
           }
 
           ctx.status = 502;
@@ -194,7 +231,10 @@ export default {
           where: { user: userId, idempotencyKey },
         });
         if (!duplicateOrder) {
-          throw error;
+          logCheckoutWarning('idempotency-key-conflict', userId, idempotencyKey);
+          ctx.status = 409;
+          ctx.body = { ok: false, error: 'IDEMPOTENCY_KEY_CONFLICT' };
+          return;
         }
 
         if (duplicateOrder.status === 'failed') {
@@ -205,7 +245,24 @@ export default {
 
         if (!hasCompletedAsaasCheckout(duplicateOrder)) {
           if (duplicateOrder.status === 'pending') {
-            return await failOrder(duplicateOrder.id, 'ASAAS_UNAVAILABLE', 502, ctx);
+            if (isRecentIncompleteCheckout(duplicateOrder)) {
+              ctx.status = 409;
+              ctx.body = { ok: false, error: 'CHECKOUT_IN_PROGRESS' };
+              return;
+            }
+
+            await orderRepository.update({
+              where: {
+                id: duplicateOrder.id,
+                status: 'pending',
+                asaasCheckoutId: { $null: true },
+                asaasInvoiceUrl: { $null: true },
+              },
+              data: { status: 'failed' },
+            });
+            ctx.status = 409;
+            ctx.body = { ok: false, error: 'CHECKOUT_RECOVERY_REQUIRED' };
+            return;
           }
 
           ctx.status = 502;
@@ -262,13 +319,27 @@ export default {
           return await failOrder(order.id, 'ASAAS_UNAVAILABLE', 502, ctx);
         }
 
-        const updated: OrderRecord = await strapi.db.query('api::order.order').update({
-          where: { id: order.id },
-          data: {
-            asaasCheckoutId: checkoutResult.data.id,
-            asaasInvoiceUrl: checkoutResult.data.link,
-          },
-        });
+        let updated: OrderRecord | null = null;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          try {
+            updated = await orderRepository.update({
+              where: { id: order.id, status: 'pending' },
+              data: {
+                asaasCheckoutId: checkoutResult.data.id,
+                asaasInvoiceUrl: checkoutResult.data.link,
+              },
+            });
+            break;
+          } catch {
+            logCheckoutWarning('checkout-persistence-failed', userId, idempotencyKey, order.id);
+          }
+        }
+
+        if (!updated) {
+          ctx.status = 503;
+          ctx.body = { ok: false, error: 'CHECKOUT_PERSISTENCE_FAILED' };
+          return;
+        }
 
         const response = successResponse(updated);
         ctx.status = 201;

@@ -32,6 +32,14 @@ class FakeRedis implements RedisConnection {
     this.values.delete(key);
     return 1;
   }
+
+  expireLocks(): void {
+    for (const key of this.values.keys()) {
+      if (key.endsWith(':lock')) {
+        this.values.delete(key);
+      }
+    }
+  }
 }
 
 describe('idempotency', () => {
@@ -69,6 +77,14 @@ describe('idempotency', () => {
 
     await releaseIdempotency(redis, userId, key, reservation.owner);
     expect((await reserveIdempotency(redis, userId, key)).status).toBe('reserved');
+  });
+
+  it('permite nova reserva após a expiração do lock', async () => {
+    const redis = new FakeRedis();
+    await reserveIdempotency(redis, userId, key);
+    redis.expireLocks();
+
+    await expect(reserveIdempotency(redis, userId, key)).resolves.toMatchObject({ status: 'reserved' });
   });
 
   it('falha em aberto quando o Redis não está disponível', async () => {

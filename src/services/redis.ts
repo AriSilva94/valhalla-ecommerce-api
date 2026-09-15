@@ -17,12 +17,18 @@ export function getRedisConnection(): Redis | null {
     return redisConnection;
   }
 
-  redisConnection = new Redis(redisUrl, {
+  const connection = new Redis(redisUrl, {
     lazyConnect: true,
     maxRetriesPerRequest: 1,
     retryStrategy: () => null,
   });
-  redisConnection.on('error', logRedisUnavailable);
+  connection.on('error', logRedisUnavailable);
+  connection.on('end', () => {
+    if (redisConnection === connection) {
+      redisConnection = undefined;
+    }
+  });
+  redisConnection = connection;
 
   return redisConnection;
 }

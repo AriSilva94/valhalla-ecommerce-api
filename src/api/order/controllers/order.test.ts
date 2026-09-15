@@ -181,7 +181,7 @@ describe('order controller: create', () => {
     expect(idempotency.releaseIdempotency).toHaveBeenCalledWith(expect.anything(), 1, expect.any(String), 'owner-1');
   });
 
-  it('marca pedido pendente sem checkout Asaas como failed após queda durante a criação', async () => {
+  it('sinaliza recuperação manual para pedido pendente antigo sem checkout Asaas', async () => {
     const incompleteOrder = {
       id: 3,
       reference: 'interrupted',
@@ -205,11 +205,83 @@ describe('order controller: create', () => {
 
     await controller.create(ctx);
 
-    expect(ctx.status).toBe(502);
-    expect(ctx.body).toEqual({ ok: false, error: 'ASAAS_UNAVAILABLE' });
-    expect(orderRepository.update).toHaveBeenCalledWith({ where: { id: 3 }, data: { status: 'failed' } });
+    expect(ctx.status).toBe(409);
+    expect(ctx.body).toEqual({ ok: false, error: 'CHECKOUT_RECOVERY_REQUIRED' });
+    expect(orderRepository.update).toHaveBeenCalledWith({
+      where: {
+        id: 3,
+        status: 'pending',
+        asaasCheckoutId: { $null: true },
+        asaasInvoiceUrl: { $null: true },
+      },
+      data: { status: 'failed' },
+    });
     expect(idempotency.saveIdempotencyResult).not.toHaveBeenCalled();
     expect(asaas.createAsaasCheckout).not.toHaveBeenCalled();
+  });
+
+  it('mantém o pedido pendente recente como checkout em andamento', async () => {
+    const activeOrder = {
+      id: 5,
+      reference: 'active-checkout',
+      items: [],
+      totalAmount: 100,
+      status: 'pending',
+      asaasCheckoutId: null,
+      asaasInvoiceUrl: null,
+      createdAt: new Date().toISOString(),
+    };
+    const strapiMock = buildStrapiForCreate({ order: activeOrder });
+    const orderRepository = strapiMock.db.query('api::order.order');
+    orderRepository.findOne.mockResolvedValue(activeOrder);
+    (globalThis as any).strapi = strapiMock;
+    (idempotency.saveIdempotencyResult as any).mockClear();
+    (redis.getRedisConnection as any).mockReturnValueOnce({});
+    (idempotency.getIdempotencyResult as any).mockResolvedValueOnce(null);
+    (idempotency.reserveIdempotency as any).mockResolvedValueOnce({ status: 'reserved', owner: 'owner-active' });
+    const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
+
+    await controller.create(ctx);
+
+    expect(ctx.status).toBe(409);
+    expect(ctx.body).toEqual({ ok: false, error: 'CHECKOUT_IN_PROGRESS' });
+    expect(orderRepository.update).not.toHaveBeenCalled();
+    expect(idempotency.saveIdempotencyResult).not.toHaveBeenCalled();
+  });
+
+  it('recupera condicionalmente o pedido pendente antigo sem checkout', async () => {
+    const staleOrder = {
+      id: 6,
+      reference: 'stale-checkout',
+      items: [],
+      totalAmount: 100,
+      status: 'pending',
+      asaasCheckoutId: null,
+      asaasInvoiceUrl: null,
+      createdAt: '2020-01-01T00:00:00.000Z',
+    };
+    const strapiMock = buildStrapiForCreate({ order: staleOrder });
+    const orderRepository = strapiMock.db.query('api::order.order');
+    orderRepository.findOne.mockResolvedValue(staleOrder);
+    (globalThis as any).strapi = strapiMock;
+    (redis.getRedisConnection as any).mockReturnValueOnce({});
+    (idempotency.getIdempotencyResult as any).mockResolvedValueOnce(null);
+    (idempotency.reserveIdempotency as any).mockResolvedValueOnce({ status: 'reserved', owner: 'owner-stale' });
+    const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
+
+    await controller.create(ctx);
+
+    expect(ctx.status).toBe(409);
+    expect(ctx.body).toEqual({ ok: false, error: 'CHECKOUT_RECOVERY_REQUIRED' });
+    expect(orderRepository.update).toHaveBeenCalledWith({
+      where: {
+        id: 6,
+        status: 'pending',
+        asaasCheckoutId: { $null: true },
+        asaasInvoiceUrl: { $null: true },
+      },
+      data: { status: 'failed' },
+    });
   });
 
   it('retorna 422 PROFILE_INCOMPLETE sem perfil salvo', async () => {
@@ -303,11 +375,80 @@ describe('order controller: create', () => {
 
     await controller.create(ctx);
 
-    expect(ctx.status).toBe(502);
-    expect(ctx.body).toEqual({ ok: false, error: 'ASAAS_UNAVAILABLE' });
-    expect(orderRepository.update).toHaveBeenCalledWith({ where: { id: 4 }, data: { status: 'failed' } });
+    expect(ctx.status).toBe(409);
+    expect(ctx.body).toEqual({ ok: false, error: 'CHECKOUT_RECOVERY_REQUIRED' });
+    expect(orderRepository.update).toHaveBeenCalledWith({
+      where: {
+        id: 4,
+        status: 'pending',
+        asaasCheckoutId: { $null: true },
+        asaasInvoiceUrl: { $null: true },
+      },
+      data: { status: 'failed' },
+    });
     expect(idempotency.saveIdempotencyResult).not.toHaveBeenCalled();
     expect(asaas.createAsaasCheckout).not.toHaveBeenCalled();
+  });
+
+  it('retorna conflito genérico quando a chave única pertence a outro usuário', async () => {
+    const strapiMock = buildStrapiForCreate({ product: PRODUCT, profile: COMPLETE_PROFILE });
+    const orderRepository = strapiMock.db.query('api::order.order');
+    orderRepository.create.mockRejectedValueOnce({ code: '23505' });
+    (globalThis as any).strapi = strapiMock;
+    (asaas.createAsaasCheckout as any).mockClear();
+    (idempotency.saveIdempotencyResult as any).mockClear();
+    (redis.getRedisConnection as any).mockReturnValueOnce({});
+    (idempotency.getIdempotencyResult as any).mockResolvedValueOnce(null);
+    (idempotency.reserveIdempotency as any).mockResolvedValueOnce({ status: 'reserved', owner: 'owner-cross-user' });
+    const ctx = buildCtx(2, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
+
+    await controller.create(ctx);
+
+    expect(ctx.status).toBe(409);
+    expect(ctx.body).toEqual({ ok: false, error: 'IDEMPOTENCY_KEY_CONFLICT' });
+    expect(asaas.createAsaasCheckout).not.toHaveBeenCalled();
+    expect(idempotency.saveIdempotencyResult).not.toHaveBeenCalled();
+  });
+
+  it('retorna falha de persistência sem marcar o checkout remoto como falho', async () => {
+    const strapiMock = buildStrapiForCreate({ product: PRODUCT, profile: COMPLETE_PROFILE });
+    const orderRepository = strapiMock.db.query('api::order.order');
+    orderRepository.update.mockRejectedValue(new Error('database unavailable'));
+    strapiMock.log = { warn: vi.fn() };
+    (globalThis as any).strapi = strapiMock;
+    (asaas.createAsaasCheckout as any).mockResolvedValue({
+      ok: true,
+      data: { id: 'chk_persist', link: 'https://sandbox.asaas.com/checkoutSession/show/chk_persist' },
+    });
+    (idempotency.saveIdempotencyResult as any).mockClear();
+    const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
+
+    await controller.create(ctx);
+
+    expect(ctx.status).toBe(503);
+    expect(ctx.body).toEqual({ ok: false, error: 'CHECKOUT_PERSISTENCE_FAILED' });
+    expect(orderRepository.update).toHaveBeenCalledTimes(2);
+    expect(idempotency.saveIdempotencyResult).not.toHaveBeenCalled();
+    expect(strapiMock.log.warn).toHaveBeenCalledWith(expect.stringContaining('checkout-persistence-failed'));
+    expect(strapiMock.log.warn.mock.calls.flat().join(' ')).not.toContain('fe5a0dc7-d204-4ab8-8e39-74191ee7b4f0');
+  });
+
+  it('recupera a persistência do checkout remoto em uma nova tentativa local', async () => {
+    const strapiMock = buildStrapiForCreate({ product: PRODUCT, profile: COMPLETE_PROFILE });
+    const orderRepository = strapiMock.db.query('api::order.order');
+    orderRepository.update.mockRejectedValueOnce(new Error('temporary database failure'));
+    (globalThis as any).strapi = strapiMock;
+    (asaas.createAsaasCheckout as any).mockResolvedValue({
+      ok: true,
+      data: { id: 'chk_recovered', link: 'https://sandbox.asaas.com/checkoutSession/show/chk_recovered' },
+    });
+    const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
+
+    await controller.create(ctx);
+
+    expect(ctx.status).toBe(201);
+    expect(ctx.body.data.checkoutUrl).toBe('https://sandbox.asaas.com/checkoutSession/show/chk_recovered');
+    expect(orderRepository.update).toHaveBeenCalledTimes(2);
   });
 
   it('marca o pedido como failed quando a criação do checkout falha', async () => {
