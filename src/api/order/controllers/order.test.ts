@@ -803,4 +803,82 @@ describe('order controller: simulatePayment', () => {
     expect(asaas.cancelAsaasCheckout).toHaveBeenCalledWith(expect.anything(), 'chk_pending_recovery');
     expect(asaas.createAsaasCheckout).not.toHaveBeenCalled();
   });
+
+  it('conclui recuperação durável após limpeza falhar e o cancelamento seguinte retornar checkout já cancelado', async () => {
+    (idempotency.getIdempotencyResult as any).mockReset().mockResolvedValue(null);
+    (idempotency.getCheckoutRecoveryMarker as any).mockReset().mockResolvedValue(null);
+    (idempotency.reserveIdempotency as any).mockReset().mockResolvedValue({ status: 'reserved', owner: 'owner-cleanup' });
+    (idempotency.clearCheckoutRecoveryMarker as any).mockReset().mockResolvedValue(true);
+    (idempotency.saveIdempotencyResult as any).mockReset().mockResolvedValue(false);
+    (idempotency.releaseIdempotency as any).mockReset().mockResolvedValue(false);
+    (redis.getRedisConnection as any).mockReset().mockReturnValue({});
+    const recoveryOrder = {
+      id: 11,
+      reference: 'retry-after-cleanup-failure',
+      items: [],
+      totalAmount: 100,
+      status: 'failed',
+      asaasCheckoutId: 'chk_recovery',
+      asaasInvoiceUrl: null,
+      checkoutRecoveryStatus: 'cancel_pending',
+      createdAt: new Date().toISOString(),
+    };
+    const resetOrder = {
+      ...recoveryOrder,
+      status: 'pending',
+      asaasCheckoutId: null,
+      checkoutRecoveryStatus: null,
+    };
+    const completedOrder = {
+      ...resetOrder,
+      asaasCheckoutId: 'chk_retried',
+      asaasInvoiceUrl: 'https://sandbox.asaas.com/checkoutSession/show/chk_retried',
+    };
+    const strapiMock = buildStrapiForCreate({ product: PRODUCT, profile: COMPLETE_PROFILE });
+    const orderRepository = strapiMock.db.query('api::order.order');
+    orderRepository.findOne.mockResolvedValue(recoveryOrder);
+    orderRepository.update
+      .mockRejectedValueOnce(new Error('temporary cleanup failure'))
+      .mockResolvedValueOnce(resetOrder)
+      .mockResolvedValueOnce(completedOrder);
+    (globalThis as any).strapi = strapiMock;
+    (asaas.createAsaasCheckout as any).mockClear();
+    (asaas.cancelAsaasCheckout as any).mockClear();
+    (asaas.cancelAsaasCheckout as any)
+      .mockResolvedValueOnce({ ok: true, data: { status: 'CANCELED' } })
+      .mockResolvedValueOnce({ ok: true, data: { status: 'ALREADY_CANCELLED' } });
+    (asaas.createAsaasCheckout as any).mockResolvedValueOnce({
+      ok: true,
+      data: { id: 'chk_retried', link: 'https://sandbox.asaas.com/checkoutSession/show/chk_retried' },
+    });
+    (idempotency.reserveIdempotency as any).mockResolvedValue({
+      status: 'reserved',
+      owner: 'owner-cleanup',
+    });
+    (redis.getRedisConnection as any).mockReturnValueOnce({}).mockReturnValueOnce({});
+    const first = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
+    const second = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
+
+    await controller.create(first);
+    await controller.create(second);
+
+    expect(first.body).toEqual({ ok: false, error: 'CHECKOUT_RECONCILIATION_REQUIRED' });
+    expect(second.status).toBe(201);
+    expect(orderRepository.update).toHaveBeenCalledWith({
+      where: {
+        id: 11,
+        status: 'failed',
+        asaasCheckoutId: 'chk_recovery',
+        checkoutRecoveryStatus: 'cancel_pending',
+      },
+      data: {
+        status: 'pending',
+        asaasCheckoutId: null,
+        asaasInvoiceUrl: null,
+        checkoutRecoveryStatus: null,
+      },
+    });
+    expect(asaas.cancelAsaasCheckout).toHaveBeenCalledTimes(2);
+    expect(asaas.createAsaasCheckout).toHaveBeenCalledTimes(1);
+  });
 });

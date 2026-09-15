@@ -233,6 +233,15 @@ describe('cancelAsaasCheckout', () => {
       status: 503,
     });
   });
+
+  it('trata checkout não encontrado como cancelado para permitir recuperação idempotente', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({}) }) as any;
+
+    await expect(cancelAsaasCheckout(config, 'chk_already_cancelled')).resolves.toEqual({
+      ok: true,
+      data: { status: 'ALREADY_CANCELLED' },
+    });
+  });
 });
 
 describe('findAsaasPaymentByCheckoutSession', () => {
