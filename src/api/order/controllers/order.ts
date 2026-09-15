@@ -14,6 +14,7 @@ import { getRedisConnection } from '../../../services/redis';
 import {
   createAsaasCheckout,
   createAsaasCustomer,
+  findAsaasCheckoutByExternalReference,
   findAsaasPaymentByCheckoutSession,
   readAsaasConfigFromEnv,
   simulateAsaasPixPayment,
@@ -143,9 +144,29 @@ export default {
 
     try {
       const orderRepository = strapi.db.query('api::order.order');
+      const asaasConfig = readAsaasConfigFromEnv();
+      const persistCheckout = async (order: OrderRecord, checkout: { id: string; link: string }) => {
+        let updated: OrderRecord | null = null;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          try {
+            updated = await orderRepository.update({
+              where: { id: order.id, status: 'pending' },
+              data: {
+                asaasCheckoutId: checkout.id,
+                asaasInvoiceUrl: checkout.link,
+              },
+            });
+            break;
+          } catch {
+            logCheckoutWarning('checkout-persistence-failed', userId, idempotencyKey, order.id);
+          }
+        }
+        return updated;
+      };
       const existingOrder: OrderRecord | null = await orderRepository.findOne({
         where: { user: userId, idempotencyKey },
       });
+      let resumedOrder: OrderRecord | null = null;
 
       if (existingOrder) {
         if (existingOrder.status === 'failed') {
@@ -156,15 +177,118 @@ export default {
 
         if (!hasCompletedAsaasCheckout(existingOrder)) {
           if (existingOrder.status === 'pending') {
-            if (isRecentIncompleteCheckout(existingOrder)) {
-              ctx.status = 409;
-              ctx.body = { ok: false, error: 'CHECKOUT_IN_PROGRESS' };
+            const reconciliation = await findAsaasCheckoutByExternalReference(asaasConfig, existingOrder.reference);
+            if (!reconciliation.ok) {
+              logCheckoutWarning('checkout-reconciliation-failed', userId, idempotencyKey, existingOrder.id);
+              ctx.status = 503;
+              ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_UNAVAILABLE' };
               return;
             }
 
+            if (reconciliation.data) {
+              const reconciledOrder = await persistCheckout(existingOrder, reconciliation.data);
+              if (!reconciledOrder) {
+                ctx.status = 503;
+                ctx.body = { ok: false, error: 'CHECKOUT_PERSISTENCE_FAILED' };
+                return;
+              }
+
+              const response = successResponse(reconciledOrder);
+              ctx.status = 201;
+              ctx.body = response;
+              await saveIdempotencyResult(redis, userId, idempotencyKey, response);
+              return;
+            }
+
+            if (isRecentIncompleteCheckout(existingOrder)) {
+              if (reservation.status === 'reserved') {
+                resumedOrder = existingOrder;
+              } else {
+                ctx.status = 409;
+                ctx.body = { ok: false, error: 'CHECKOUT_IN_PROGRESS' };
+                return;
+              }
+            } else {
+              await orderRepository.update({
+                where: {
+                  id: existingOrder.id,
+                  status: 'pending',
+                  asaasCheckoutId: { $null: true },
+                  asaasInvoiceUrl: { $null: true },
+                },
+                data: { status: 'failed' },
+              });
+              ctx.status = 409;
+              ctx.body = { ok: false, error: 'CHECKOUT_RECOVERY_REQUIRED' };
+              return;
+            }
+          } else {
+            ctx.status = 502;
+            ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
+            return;
+          }
+        } else {
+          const response = successResponse(existingOrder);
+          ctx.status = 201;
+          ctx.body = response;
+          await saveIdempotencyResult(redis, userId, idempotencyKey, response);
+          return;
+        }
+      }
+
+      if (!resumedOrder) {
+        const body = ctx.request.body as { items?: unknown };
+        const pricing = await resolveOrderItems(body?.items, makeProductLookup());
+        if (!pricing.ok) {
+          ctx.status = 400;
+          ctx.body = { ok: false, error: pricing.error };
+          return;
+        }
+
+        try {
+          resumedOrder = await orderRepository.create({
+            data: {
+              user: userId,
+              reference: generateOrderReference(),
+              idempotencyKey,
+              items: pricing.items,
+              totalAmount: pricing.totalAmount,
+              status: 'pending',
+            },
+          });
+        } catch (error) {
+          if (!isUniqueConstraintError(error)) {
+            throw error;
+          }
+
+          const duplicateOrder: OrderRecord | null = await orderRepository.findOne({
+            where: { user: userId, idempotencyKey },
+          });
+          if (!duplicateOrder) {
+            logCheckoutWarning('idempotency-key-conflict', userId, idempotencyKey);
+            ctx.status = 409;
+            ctx.body = { ok: false, error: 'IDEMPOTENCY_KEY_CONFLICT' };
+            return;
+          }
+
+          if (duplicateOrder.status === 'failed') {
+            ctx.status = 502;
+            ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
+            return;
+          }
+
+          if (hasCompletedAsaasCheckout(duplicateOrder)) {
+            const response = successResponse(duplicateOrder);
+            ctx.status = 201;
+            ctx.body = response;
+            await saveIdempotencyResult(redis, userId, idempotencyKey, response);
+            return;
+          }
+
+          if (duplicateOrder.status === 'pending' && !isRecentIncompleteCheckout(duplicateOrder)) {
             await orderRepository.update({
               where: {
-                id: existingOrder.id,
+                id: duplicateOrder.id,
                 status: 'pending',
                 asaasCheckoutId: { $null: true },
                 asaasInvoiceUrl: { $null: true },
@@ -176,23 +300,16 @@ export default {
             return;
           }
 
-          ctx.status = 502;
-          ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
+          ctx.status = 409;
+          ctx.body = { ok: false, error: 'CHECKOUT_IN_PROGRESS' };
           return;
         }
-
-        const response = successResponse(existingOrder);
-        ctx.status = 201;
-        ctx.body = response;
-        await saveIdempotencyResult(redis, userId, idempotencyKey, response);
-        return;
       }
 
-      const body = ctx.request.body as { items?: unknown };
-      const pricing = await resolveOrderItems(body?.items, makeProductLookup());
-      if (!pricing.ok) {
-        ctx.status = 400;
-        ctx.body = { ok: false, error: pricing.error };
+      const order = resumedOrder;
+      if (!order) {
+        ctx.status = 500;
+        ctx.body = { ok: false, error: 'CHECKOUT_CREATION_FAILED' };
         return;
       }
 
@@ -209,75 +326,6 @@ export default {
       const user: any = await strapi.db
         .query('plugin::users-permissions.user')
         .findOne({ where: { id: userId } });
-
-      let order: OrderRecord;
-      try {
-        order = await orderRepository.create({
-          data: {
-            user: userId,
-            reference: generateOrderReference(),
-            idempotencyKey,
-            items: pricing.items,
-            totalAmount: pricing.totalAmount,
-            status: 'pending',
-          },
-        });
-      } catch (error) {
-        if (!isUniqueConstraintError(error)) {
-          throw error;
-        }
-
-        const duplicateOrder: OrderRecord | null = await orderRepository.findOne({
-          where: { user: userId, idempotencyKey },
-        });
-        if (!duplicateOrder) {
-          logCheckoutWarning('idempotency-key-conflict', userId, idempotencyKey);
-          ctx.status = 409;
-          ctx.body = { ok: false, error: 'IDEMPOTENCY_KEY_CONFLICT' };
-          return;
-        }
-
-        if (duplicateOrder.status === 'failed') {
-          ctx.status = 502;
-          ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
-          return;
-        }
-
-        if (!hasCompletedAsaasCheckout(duplicateOrder)) {
-          if (duplicateOrder.status === 'pending') {
-            if (isRecentIncompleteCheckout(duplicateOrder)) {
-              ctx.status = 409;
-              ctx.body = { ok: false, error: 'CHECKOUT_IN_PROGRESS' };
-              return;
-            }
-
-            await orderRepository.update({
-              where: {
-                id: duplicateOrder.id,
-                status: 'pending',
-                asaasCheckoutId: { $null: true },
-                asaasInvoiceUrl: { $null: true },
-              },
-              data: { status: 'failed' },
-            });
-            ctx.status = 409;
-            ctx.body = { ok: false, error: 'CHECKOUT_RECOVERY_REQUIRED' };
-            return;
-          }
-
-          ctx.status = 502;
-          ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
-          return;
-        }
-
-        const response = successResponse(duplicateOrder);
-        ctx.status = 201;
-        ctx.body = response;
-        await saveIdempotencyResult(redis, userId, idempotencyKey, response);
-        return;
-      }
-
-      const asaasConfig = readAsaasConfigFromEnv();
 
       try {
         let asaasCustomerId: string | undefined = profile.asaasCustomerId;
@@ -308,7 +356,7 @@ export default {
         const checkoutResult = await createAsaasCheckout(asaasConfig, {
           customerId: asaasCustomerId,
           externalReference: order.reference,
-          value: pricing.totalAmount,
+          value: order.totalAmount,
           description: `Pedido #${order.id}`,
           successUrl: `${base}/pedidos/${order.reference}`,
           cancelUrl: `${base}/checkout`,
@@ -319,22 +367,7 @@ export default {
           return await failOrder(order.id, 'ASAAS_UNAVAILABLE', 502, ctx);
         }
 
-        let updated: OrderRecord | null = null;
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-          try {
-            updated = await orderRepository.update({
-              where: { id: order.id, status: 'pending' },
-              data: {
-                asaasCheckoutId: checkoutResult.data.id,
-                asaasInvoiceUrl: checkoutResult.data.link,
-              },
-            });
-            break;
-          } catch {
-            logCheckoutWarning('checkout-persistence-failed', userId, idempotencyKey, order.id);
-          }
-        }
-
+        const updated = await persistCheckout(order, checkoutResult.data);
         if (!updated) {
           ctx.status = 503;
           ctx.body = { ok: false, error: 'CHECKOUT_PERSISTENCE_FAILED' };

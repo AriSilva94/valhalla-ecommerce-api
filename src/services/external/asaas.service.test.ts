@@ -4,6 +4,7 @@ import {
   testAsaasConnection,
   createAsaasCustomer,
   createAsaasCheckout,
+  findAsaasCheckoutByExternalReference,
   findAsaasPaymentByCheckoutSession,
   simulateAsaasPixPayment,
 } from './asaas.service';
@@ -202,6 +203,38 @@ describe('createAsaasCheckout', () => {
       expiredUrl: 'https://loja.example.com/checkout',
     });
     expect(result).toEqual({ ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 });
+  });
+});
+
+describe('findAsaasCheckoutByExternalReference', () => {
+  it('busca o checkout pelo externalReference e retorna apenas id e link', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [{ id: 'chk_123', link: 'https://sandbox.asaas.com/checkoutSession/show/chk_123' }] }),
+    });
+    global.fetch = fetchMock as any;
+
+    const result = await findAsaasCheckoutByExternalReference(config, 'pedido/123');
+
+    expect(result).toEqual({
+      ok: true,
+      data: { id: 'chk_123', link: 'https://sandbox.asaas.com/checkoutSession/show/chk_123' },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api-sandbox.asaas.com/v3/checkouts?externalReference=pedido%2F123',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+
+  it('mantém a falha da Asaas sanitizada', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }) as any;
+
+    await expect(findAsaasCheckoutByExternalReference(config, 'pedido-123')).resolves.toEqual({
+      ok: false,
+      code: 'ASAAS_UNAVAILABLE',
+      status: 503,
+    });
   });
 });
 
