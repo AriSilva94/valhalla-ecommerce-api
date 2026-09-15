@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getCheckoutRecoveryMarker,
   getIdempotencyResult,
   releaseIdempotency,
   reserveIdempotency,
+  saveCheckoutRecoveryMarker,
   saveIdempotencyResult,
   type RedisConnection,
 } from './idempotency';
@@ -22,6 +24,10 @@ class FakeRedis implements RedisConnection {
 
     this.values.set(key, value);
     return 'OK';
+  }
+
+  async del(key: string): Promise<number> {
+    return this.values.delete(key) ? 1 : 0;
   }
 
   async eval(_script: string, _numberOfKeys: number, key: string, owner: string): Promise<number> {
@@ -65,6 +71,13 @@ describe('idempotency', () => {
     await expect(getIdempotencyResult<typeof response>(redis, userId, key)).resolves.toEqual(response);
   });
 
+  it('mantém o checkout órfão pendente de reconciliação por 24 horas', async () => {
+    const redis = new FakeRedis();
+
+    await expect(saveCheckoutRecoveryMarker(redis, userId, key, 'chk_orphan')).resolves.toBe(true);
+    await expect(getCheckoutRecoveryMarker(redis, userId, key)).resolves.toEqual({ checkoutId: 'chk_orphan' });
+  });
+
   it('libera a reserva somente quando o proprietário é o mesmo', async () => {
     const redis = new FakeRedis();
     const reservation = await reserveIdempotency(redis, userId, key);
@@ -93,6 +106,9 @@ describe('idempotency', () => {
         throw new Error('connection refused');
       },
       set: async () => {
+        throw new Error('connection refused');
+      },
+      del: async () => {
         throw new Error('connection refused');
       },
       eval: async () => {

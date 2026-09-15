@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 export type RedisConnection = {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, mode: 'EX', duration: number, condition?: 'NX'): Promise<'OK' | null>;
+  del(key: string): Promise<number>;
   eval(script: string, numberOfKeys: number, ...args: string[]): Promise<unknown>;
 };
 
@@ -13,6 +14,10 @@ export type IdempotencyReservation =
 
 const LOCK_TTL_SECONDS = 60;
 const RESULT_TTL_SECONDS = 86_400;
+
+export type CheckoutRecoveryMarker = {
+  checkoutId: string;
+};
 
 const RELEASE_IF_OWNER_SCRIPT = `
   if redis.call('get', KEYS[1]) == ARGV[1] then
@@ -31,6 +36,10 @@ function lockKey(userId: number, idempotencyKey: string): string {
 
 function resultKey(userId: number, idempotencyKey: string): string {
   return `${keyPrefix(userId, idempotencyKey)}:result`;
+}
+
+function recoveryKey(userId: number, idempotencyKey: string): string {
+  return `${keyPrefix(userId, idempotencyKey)}:recovery`;
 }
 
 export async function reserveIdempotency(
@@ -81,6 +90,63 @@ export async function saveIdempotencyResult(
 
   try {
     await redis.set(resultKey(userId, idempotencyKey), JSON.stringify(response), 'EX', RESULT_TTL_SECONDS);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function getCheckoutRecoveryMarker(
+  redis: RedisConnection | null,
+  userId: number,
+  idempotencyKey: string
+): Promise<CheckoutRecoveryMarker | null> {
+  if (!redis) {
+    return null;
+  }
+
+  try {
+    const result = await redis.get(recoveryKey(userId, idempotencyKey));
+    if (!result) {
+      return null;
+    }
+
+    const marker = JSON.parse(result) as Partial<CheckoutRecoveryMarker>;
+    return typeof marker.checkoutId === 'string' && marker.checkoutId ? { checkoutId: marker.checkoutId } : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveCheckoutRecoveryMarker(
+  redis: RedisConnection | null,
+  userId: number,
+  idempotencyKey: string,
+  checkoutId: string
+): Promise<boolean> {
+  if (!redis) {
+    return false;
+  }
+
+  try {
+    await redis.set(recoveryKey(userId, idempotencyKey), JSON.stringify({ checkoutId }), 'EX', RESULT_TTL_SECONDS);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function clearCheckoutRecoveryMarker(
+  redis: RedisConnection | null,
+  userId: number,
+  idempotencyKey: string
+): Promise<boolean> {
+  if (!redis) {
+    return false;
+  }
+
+  try {
+    await redis.del(recoveryKey(userId, idempotencyKey));
     return true;
   } catch {
     return false;

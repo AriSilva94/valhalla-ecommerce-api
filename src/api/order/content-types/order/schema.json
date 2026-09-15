@@ -45,6 +45,11 @@
     },
     "asaasPaymentId": { "type": "string" },
     "asaasCheckoutId": { "type": "string" },
-    "asaasInvoiceUrl": { "type": "string" }
+    "asaasInvoiceUrl": { "type": "string" },
+    "checkoutRecoveryStatus": {
+      "type": "enumeration",
+      "enum": ["cancel_pending"],
+      "private": true
+    }
   }
 }

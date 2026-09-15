@@ -3,9 +3,12 @@ import { createHash, randomBytes } from 'crypto';
 import type { Context } from 'koa';
 
 import {
+  clearCheckoutRecoveryMarker,
+  getCheckoutRecoveryMarker,
   getIdempotencyResult,
   releaseIdempotency,
   reserveIdempotency,
+  saveCheckoutRecoveryMarker,
   saveIdempotencyResult,
 } from '../../../order/idempotency';
 import { resolveOrderItems, type ProductLookup } from '../../../order/pricing';
@@ -135,6 +138,31 @@ export default {
       return;
     }
 
+    const recoveryMarker = await getCheckoutRecoveryMarker(redis, userId, idempotencyKey);
+    if (recoveryMarker) {
+      try {
+        const cancellation = await cancelAsaasCheckout(readAsaasConfigFromEnv(), recoveryMarker.checkoutId);
+        if (!cancellation.ok) {
+          logCheckoutWarning('checkout-cancel-failed', userId, idempotencyKey);
+          ctx.status = 503;
+          ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_REQUIRED' };
+          return;
+        }
+
+        if (!(await clearCheckoutRecoveryMarker(redis, userId, idempotencyKey))) {
+          logCheckoutWarning('checkout-recovery-marker-clear-failed', userId, idempotencyKey);
+          ctx.status = 503;
+          ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_REQUIRED' };
+          return;
+        }
+      } catch {
+        logCheckoutWarning('checkout-cancel-failed', userId, idempotencyKey);
+        ctx.status = 503;
+        ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_REQUIRED' };
+        return;
+      }
+    }
+
     const reservation = await reserveIdempotency(redis, userId, idempotencyKey);
     if (reservation.status === 'in-progress') {
       ctx.status = 409;
@@ -163,19 +191,84 @@ export default {
         }
         return updated;
       };
+      const markCheckoutRecovery = async (order: OrderRecord, checkoutId: string): Promise<boolean> => {
+        try {
+          const marked = await orderRepository.update({
+            where: {
+              id: order.id,
+              status: 'pending',
+              asaasCheckoutId: { $null: true },
+              asaasInvoiceUrl: { $null: true },
+            },
+            data: {
+              status: 'failed',
+              asaasCheckoutId: checkoutId,
+              checkoutRecoveryStatus: 'cancel_pending',
+            },
+          });
+          return Boolean(marked);
+        } catch {
+          logCheckoutWarning('checkout-recovery-persistence-failed', userId, idempotencyKey, order.id);
+          return false;
+        }
+      };
       const existingOrder: OrderRecord | null = await orderRepository.findOne({
         where: { user: userId, idempotencyKey },
       });
       let resumedOrder: OrderRecord | null = null;
 
       if (existingOrder) {
-        if (existingOrder.status === 'failed') {
+        if (existingOrder.checkoutRecoveryStatus === 'cancel_pending') {
+          if (!existingOrder.asaasCheckoutId) {
+            logCheckoutWarning('checkout-recovery-missing-id', userId, idempotencyKey, existingOrder.id);
+            ctx.status = 503;
+            ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_REQUIRED' };
+            return;
+          }
+
+          const cancellation = await cancelAsaasCheckout(asaasConfig, existingOrder.asaasCheckoutId);
+          if (!cancellation.ok) {
+            logCheckoutWarning('checkout-cancel-failed', userId, idempotencyKey, existingOrder.id);
+            ctx.status = 503;
+            ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_REQUIRED' };
+            return;
+          }
+
+          try {
+            const recoveredOrder: OrderRecord = await orderRepository.update({
+              where: {
+                id: existingOrder.id,
+                status: 'failed',
+                asaasCheckoutId: existingOrder.asaasCheckoutId,
+                checkoutRecoveryStatus: 'cancel_pending',
+              },
+              data: {
+                status: 'pending',
+                asaasCheckoutId: null,
+                asaasInvoiceUrl: null,
+                checkoutRecoveryStatus: null,
+              },
+            });
+            if (reservation.status === 'reserved') {
+              resumedOrder = recoveredOrder;
+            } else {
+              ctx.status = 409;
+              ctx.body = { ok: false, error: 'CHECKOUT_IN_PROGRESS' };
+              return;
+            }
+          } catch {
+            logCheckoutWarning('checkout-recovery-persistence-failed', userId, idempotencyKey, existingOrder.id);
+            ctx.status = 503;
+            ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_REQUIRED' };
+            return;
+          }
+        } else if (existingOrder.status === 'failed') {
           ctx.status = 502;
           ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
           return;
         }
 
-        if (!hasCompletedAsaasCheckout(existingOrder)) {
+        if (!resumedOrder && !hasCompletedAsaasCheckout(existingOrder)) {
           if (existingOrder.status === 'pending') {
             if (isRecentIncompleteCheckout(existingOrder)) {
               if (reservation.status === 'reserved') {
@@ -204,7 +297,7 @@ export default {
             ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
             return;
           }
-        } else {
+        } else if (!resumedOrder) {
           const response = successResponse(existingOrder);
           ctx.status = 201;
           ctx.body = response;
@@ -348,17 +441,30 @@ export default {
         if (!updated) {
           try {
             const cancellation = await cancelAsaasCheckout(asaasConfig, checkoutResult.data.id);
+            if (cancellation.ok) {
+              logCheckoutWarning('checkout-cancelled-after-persistence-failure', userId, idempotencyKey, order.id);
+              ctx.status = 503;
+              ctx.body = { ok: false, error: 'CHECKOUT_PERSISTENCE_FAILED' };
+              return;
+            }
+
+            logCheckoutWarning('checkout-cancel-failed', userId, idempotencyKey, order.id);
+          } catch {
+            logCheckoutWarning('checkout-cancel-failed', userId, idempotencyKey, order.id);
+          }
+
+          const marked = await markCheckoutRecovery(order, checkoutResult.data.id);
+          if (!marked) {
+            const markerSaved = await saveCheckoutRecoveryMarker(redis, userId, idempotencyKey, checkoutResult.data.id);
             logCheckoutWarning(
-              cancellation.ok ? 'checkout-cancelled-after-persistence-failure' : 'checkout-cancel-failed',
+              markerSaved ? 'checkout-recovery-marker-saved' : 'checkout-recovery-marker-unavailable',
               userId,
               idempotencyKey,
               order.id
             );
-          } catch {
-            logCheckoutWarning('checkout-cancel-failed', userId, idempotencyKey, order.id);
           }
           ctx.status = 503;
-          ctx.body = { ok: false, error: 'CHECKOUT_PERSISTENCE_FAILED' };
+          ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_REQUIRED' };
           return;
         }
 
