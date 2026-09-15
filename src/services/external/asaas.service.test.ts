@@ -160,6 +160,7 @@ describe('createAsaasCheckout', () => {
     global.fetch = fetchMock as any;
 
     const result = await createAsaasCheckout(config, {
+      idempotencyKey: '550e8400-e29b-41d4-a716-446655440011',
       customerId: 'cus_123',
       externalReference: 'abc123def4',
       value: 100,
@@ -175,6 +176,7 @@ describe('createAsaasCheckout', () => {
     });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('https://api-sandbox.asaas.com/v3/checkouts');
+    expect(init.headers).toEqual(expect.objectContaining({ 'Idempotency-Key': '550e8400-e29b-41d4-a716-446655440011' }));
     const sentBody = JSON.parse(init.body);
     expect(sentBody).toEqual({
       billingTypes: ['PIX'],

@@ -23,6 +23,11 @@
       "unique": true,
       "private": true
     },
+    "checkoutIdempotencyKey": {
+      "type": "string",
+      "unique": true,
+      "private": true
+    },
     "items": {
       "type": "json",
       "required": true

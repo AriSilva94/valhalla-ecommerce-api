@@ -50,6 +50,32 @@ function generateOrderReference(): string {
   return randomBytes(5).toString('hex');
 }
 
+function readIdempotencyKey(ctx: Context): string | null {
+  const key = ctx.get('Idempotency-Key').trim();
+  return isUuidV4(key) ? key : null;
+}
+
+function isUuidV4(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function idempotencyScope(userId: number, key: string): string {
+  return `${userId}:${key}`;
+}
+
+function hasSamePayload(order: OrderRecord, items: OrderRecord['items'], totalAmount: number): boolean {
+  return order.totalAmount === totalAmount && JSON.stringify(order.items) === JSON.stringify(items);
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return error instanceof Error && /unique|constraint|duplicate/i.test(error.message);
+}
+
+function returnExistingOrder(ctx: Context, order: OrderRecord): void {
+  ctx.status = 200;
+  ctx.body = { ok: true, data: serializeOrder(order) };
+}
+
 async function failOrder(orderId: number, code: string, status: number, ctx: Context) {
   await strapi.db.query('api::order.order').update({ where: { id: orderId }, data: { status: 'failed' } });
   ctx.status = status;
@@ -60,6 +86,13 @@ export default {
   async create(ctx: Context) {
     const userId = ctx.state.user?.id;
     if (!userId) return ctx.unauthorized();
+
+    const idempotencyKey = readIdempotencyKey(ctx);
+    if (!idempotencyKey) {
+      ctx.status = 400;
+      ctx.body = { ok: false, error: 'INVALID_IDEMPOTENCY_KEY' };
+      return;
+    }
 
     const body = ctx.request.body as { items?: unknown };
     const pricing = await resolveOrderItems(body?.items, makeProductLookup());
@@ -83,15 +116,52 @@ export default {
       .query('plugin::users-permissions.user')
       .findOne({ where: { id: userId } });
 
-    const order: OrderRecord = await strapi.db.query('api::order.order').create({
-      data: {
-        user: userId,
-        reference: generateOrderReference(),
-        items: pricing.items,
-        totalAmount: pricing.totalAmount,
-        status: 'pending',
-      },
+    const orderQuery = strapi.db.query('api::order.order');
+    const scope = idempotencyScope(userId, idempotencyKey);
+    const existingOrder: OrderRecord | null = await orderQuery.findOne({
+      where: { checkoutIdempotencyKey: scope },
     });
+
+    if (existingOrder) {
+      if (!hasSamePayload(existingOrder, pricing.items, pricing.totalAmount)) {
+        ctx.status = 409;
+        ctx.body = { ok: false, error: 'IDEMPOTENCY_KEY_REUSED' };
+        return;
+      }
+
+      returnExistingOrder(ctx, existingOrder);
+      return;
+    }
+
+    let order: OrderRecord;
+    try {
+      order = await orderQuery.create({
+        data: {
+          user: userId,
+          reference: generateOrderReference(),
+          checkoutIdempotencyKey: scope,
+          items: pricing.items,
+          totalAmount: pricing.totalAmount,
+          status: 'pending',
+        },
+      });
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) throw error;
+
+      const concurrentOrder: OrderRecord | null = await orderQuery.findOne({
+        where: { checkoutIdempotencyKey: scope },
+      });
+      if (!concurrentOrder) throw error;
+
+      if (!hasSamePayload(concurrentOrder, pricing.items, pricing.totalAmount)) {
+        ctx.status = 409;
+        ctx.body = { ok: false, error: 'IDEMPOTENCY_KEY_REUSED' };
+        return;
+      }
+
+      returnExistingOrder(ctx, concurrentOrder);
+      return;
+    }
 
     const asaasConfig = readAsaasConfigFromEnv();
 
@@ -122,6 +192,7 @@ export default {
 
       const base = frontendUrl();
       const checkoutResult = await createAsaasCheckout(asaasConfig, {
+        idempotencyKey,
         customerId: asaasCustomerId,
         externalReference: order.reference,
         value: pricing.totalAmount,

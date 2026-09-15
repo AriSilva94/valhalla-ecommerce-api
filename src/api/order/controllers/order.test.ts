@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../services/external/asaas.service', () => ({
   readAsaasConfigFromEnv: vi.fn(() => ({
@@ -16,13 +16,21 @@ vi.mock('../../../services/external/asaas.service', () => ({
 import controller from './order';
 import * as asaas from '../../../services/external/asaas.service';
 
-function buildCtx(userId: number | undefined, body: unknown = {}, params: Record<string, string> = {}) {
+const VALID_KEY = '550e8400-e29b-41d4-a716-446655440010';
+
+function buildCtx(
+  userId: number | undefined,
+  body: unknown = {},
+  params: Record<string, string> = {},
+  headers: Record<string, string> = { 'Idempotency-Key': VALID_KEY }
+) {
   return {
     state: { user: userId ? { id: userId } : undefined },
     request: { body },
     params,
     status: 0,
     body: undefined,
+    get: (header: string) => headers[header] || headers[header.toLowerCase()] || '',
     unauthorized: vi.fn(),
     notFound: vi.fn(),
   } as any;
@@ -33,6 +41,8 @@ function buildStrapiForCreate(opts: {
   profile?: any;
   user?: any;
   order?: any;
+  existingOrder?: any;
+  orderCreate?: any;
 }) {
   const queries: Record<string, any> = {
     'api::product.product': { findOne: vi.fn().mockResolvedValue(opts.product ?? null) },
@@ -44,10 +54,10 @@ function buildStrapiForCreate(opts: {
       findOne: vi.fn().mockResolvedValue(opts.user ?? { id: 1, username: 'joe', email: 'joe@example.com' }),
     },
     'api::order.order': {
-      create: vi.fn().mockResolvedValue(opts.order ?? { id: 1, reference: 'abc123def4', createdAt: '2026-09-12T10:00:00.000Z' }),
+      create: vi.fn().mockResolvedValue(opts.orderCreate ?? opts.order ?? { id: 1, reference: 'abc123def4', createdAt: '2026-09-12T10:00:00.000Z' }),
       update: vi.fn().mockImplementation(async ({ data }: any) => ({ id: 1, reference: 'abc123def4', createdAt: '2026-09-12T10:00:00.000Z', ...data })),
       findMany: vi.fn().mockResolvedValue([]),
-      findOne: vi.fn().mockResolvedValue(null),
+      findOne: vi.fn().mockResolvedValue(opts.existingOrder ?? null),
     },
   };
   return { db: { query: (uid: string) => queries[uid] } };
@@ -71,6 +81,10 @@ const PRODUCT = {
 };
 
 describe('order controller: create', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('retorna 401 sem usuário', async () => {
     const ctx = buildCtx(undefined);
     (globalThis as any).strapi = buildStrapiForCreate({});
@@ -94,6 +108,103 @@ describe('order controller: create', () => {
     expect(ctx.body).toEqual({ ok: false, error: 'PROFILE_INCOMPLETE' });
   });
 
+  it('retorna o pedido existente e não chama o gateway ao repetir a mesma operação', async () => {
+    const key = '550e8400-e29b-41d4-a716-446655440000';
+    const existingOrder = {
+      id: 9,
+      reference: 'existing123',
+      items: [{ productSlug: 'iphone-15', productName: 'iPhone 15', variantSku: 'S1', colorName: 'Preto', configLabel: '128GB', unitPrice: 100, qty: 1 }],
+      totalAmount: 100,
+      status: 'pending',
+      asaasInvoiceUrl: 'https://sandbox.asaas.com/checkout/existing',
+      createdAt: '2026-09-12T10:00:00.000Z',
+    };
+    const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] }, {}, { 'Idempotency-Key': key });
+    const strapiMock = buildStrapiForCreate({ product: PRODUCT, profile: COMPLETE_PROFILE, existingOrder });
+    (globalThis as any).strapi = strapiMock;
+
+    await controller.create(ctx);
+
+    expect(strapiMock.db.query('api::order.order').create).not.toHaveBeenCalled();
+    expect(asaas.createAsaasCheckout).not.toHaveBeenCalled();
+    expect(ctx.status).toBe(200);
+    expect(ctx.body).toEqual({ ok: true, data: expect.objectContaining({ reference: 'existing123' }) });
+  });
+
+  it('não cria dois pedidos nem chama o gateway duas vezes em tentativas concorrentes', async () => {
+    const key = '550e8400-e29b-41d4-a716-446655440001';
+    const createdOrder = {
+      id: 10,
+      reference: 'concurrent1',
+      items: [{ productSlug: 'iphone-15', productName: 'iPhone 15', variantSku: 'S1', colorName: 'Preto', configLabel: '128GB', unitPrice: 100, qty: 1 }],
+      totalAmount: 100,
+      status: 'pending',
+      createdAt: '2026-09-12T10:00:00.000Z',
+    };
+    let findOneCalls = 0;
+    const orderQuery = {
+      create: vi.fn()
+        .mockResolvedValueOnce(createdOrder)
+        .mockRejectedValueOnce(new Error('UNIQUE constraint failed: orders.checkout_idempotency_key')),
+      update: vi.fn().mockResolvedValue(createdOrder),
+      findMany: vi.fn().mockResolvedValue([]),
+      findOne: vi.fn().mockImplementation(async () => {
+        findOneCalls += 1;
+        return findOneCalls > 2 ? createdOrder : null;
+      }),
+    };
+    const base = buildStrapiForCreate({ product: PRODUCT, profile: COMPLETE_PROFILE });
+    const originalQuery = base.db.query;
+    base.db.query = ((uid: string) => uid === 'api::order.order' ? orderQuery : originalQuery(uid)) as any;
+    (globalThis as any).strapi = base;
+    (asaas.createAsaasCheckout as any).mockResolvedValue({ ok: true, data: { id: 'chk_1', link: 'https://sandbox.asaas.com/checkout/chk_1' } });
+
+    const body = { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] };
+    await Promise.all([
+      controller.create(buildCtx(1, body, {}, { 'Idempotency-Key': key })),
+      controller.create(buildCtx(1, body, {}, { 'Idempotency-Key': key })),
+    ]);
+
+    expect(orderQuery.create).toHaveBeenCalledTimes(2);
+    expect(asaas.createAsaasCheckout).toHaveBeenCalledTimes(1);
+  });
+
+  it('retorna conflito quando a mesma chave é usada com payload diferente', async () => {
+    const key = '550e8400-e29b-41d4-a716-446655440002';
+    const existingOrder = {
+      id: 11,
+      reference: 'different-payload',
+      items: [{ productSlug: 'iphone-15', productName: 'iPhone 15', variantSku: 'S1', colorName: 'Preto', configLabel: '128GB', unitPrice: 100, qty: 2 }],
+      totalAmount: 200,
+      status: 'pending',
+      createdAt: '2026-09-12T10:00:00.000Z',
+    };
+    const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] }, {}, { 'Idempotency-Key': key });
+    const strapiMock = buildStrapiForCreate({ product: PRODUCT, profile: COMPLETE_PROFILE, existingOrder });
+    (globalThis as any).strapi = strapiMock;
+
+    await controller.create(ctx);
+
+    expect(ctx.status).toBe(409);
+    expect(ctx.body).toEqual({ ok: false, error: 'IDEMPOTENCY_KEY_REUSED' });
+    expect(strapiMock.db.query('api::order.order').create).not.toHaveBeenCalled();
+    expect(asaas.createAsaasCheckout).not.toHaveBeenCalled();
+  });
+
+  it('retorna erro para chave ausente ou malformada sem criar pedido', async () => {
+    for (const key of ['', 'not-a-uuid', '550e8400-e29b-11d4-a716-446655440003']) {
+      const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] }, {}, { 'Idempotency-Key': key });
+      const strapiMock = buildStrapiForCreate({ product: PRODUCT, profile: COMPLETE_PROFILE });
+      (globalThis as any).strapi = strapiMock;
+
+      await controller.create(ctx);
+
+      expect(ctx.status).toBe(400);
+      expect(ctx.body).toEqual({ ok: false, error: 'INVALID_IDEMPOTENCY_KEY' });
+      expect(strapiMock.db.query('api::order.order').create).not.toHaveBeenCalled();
+    }
+  });
+
   it('cria o pedido e o checkout Asaas com perfil e asaasCustomerId já existentes', async () => {
     (asaas.createAsaasCheckout as any).mockResolvedValue({
       ok: true,
@@ -101,14 +212,22 @@ describe('order controller: create', () => {
     });
 
     const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
-    (globalThis as any).strapi = buildStrapiForCreate({ product: PRODUCT, profile: COMPLETE_PROFILE });
+    const strapiMock = buildStrapiForCreate({ product: PRODUCT, profile: COMPLETE_PROFILE });
+    (globalThis as any).strapi = strapiMock;
 
     await controller.create(ctx);
 
     expect(asaas.createAsaasCustomer).not.toHaveBeenCalled();
+    expect(strapiMock.db.query('api::order.order').create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ checkoutIdempotencyKey: `1:${VALID_KEY}` }),
+    });
     expect(asaas.createAsaasCheckout).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ customerId: 'cus_existing', externalReference: 'abc123def4' })
+      expect.objectContaining({
+        customerId: 'cus_existing',
+        externalReference: 'abc123def4',
+        idempotencyKey: VALID_KEY,
+      })
     );
     expect(ctx.status).toBe(201);
     expect(ctx.body.ok).toBe(true);

@@ -144,6 +144,7 @@ export async function createAsaasCustomer(
 }
 
 export type AsaasCheckoutInput = {
+  idempotencyKey?: string;
   customerId: string;
   externalReference: string;
   value: number;
@@ -159,6 +160,7 @@ export async function createAsaasCheckout(
 ): Promise<AsaasApiResult<{ id: string; link: string }>> {
   return asaasRequest<{ id: string; link: string }>(config, '/checkouts', {
     method: 'POST',
+    headers: input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : undefined,
     body: JSON.stringify({
       billingTypes: ['PIX'],
       chargeTypes: ['DETACHED'],
