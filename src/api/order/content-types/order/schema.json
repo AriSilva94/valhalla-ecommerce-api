@@ -23,6 +23,12 @@
       "unique": true,
       "private": true
     },
+    "idempotencyKey": {
+      "type": "string",
+      "required": true,
+      "unique": true,
+      "private": true
+    },
     "items": {
       "type": "json",
       "required": true

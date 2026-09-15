@@ -2,8 +2,15 @@ import { randomBytes } from 'crypto';
 
 import type { Context } from 'koa';
 
+import {
+  getIdempotencyResult,
+  releaseIdempotency,
+  reserveIdempotency,
+  saveIdempotencyResult,
+} from '../../../order/idempotency';
 import { resolveOrderItems, type ProductLookup } from '../../../order/pricing';
 import { serializeOrder, type OrderRecord } from '../../../order/serialize-order';
+import { getRedisConnection } from '../../../services/redis';
 import {
   createAsaasCheckout,
   createAsaasCustomer,
@@ -50,6 +57,33 @@ function generateOrderReference(): string {
   return randomBytes(5).toString('hex');
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+type OrderCreateResponse = {
+  ok: true;
+  data: ReturnType<typeof serializeOrder>;
+};
+
+function readIdempotencyKey(ctx: Context): string | null {
+  const value = ctx.request.header['idempotency-key'];
+  return typeof value === 'string' && UUID_PATTERN.test(value) ? value : null;
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as { code?: unknown; message?: unknown };
+  const code = typeof candidate.code === 'string' ? candidate.code : '';
+  const message = typeof candidate.message === 'string' ? candidate.message.toLowerCase() : '';
+  return code === '23505' || code === 'SQLITE_CONSTRAINT' || message.includes('unique');
+}
+
+function successResponse(order: OrderRecord): OrderCreateResponse {
+  return { ok: true, data: serializeOrder(order) };
+}
+
 async function failOrder(orderId: number, code: string, status: number, ctx: Context) {
   await strapi.db.query('api::order.order').update({ where: { id: orderId }, data: { status: 'failed' } });
   ctx.status = status;
@@ -61,92 +95,168 @@ export default {
     const userId = ctx.state.user?.id;
     if (!userId) return ctx.unauthorized();
 
-    const body = ctx.request.body as { items?: unknown };
-    const pricing = await resolveOrderItems(body?.items, makeProductLookup());
-    if (!pricing.ok) {
+    const idempotencyKey = readIdempotencyKey(ctx);
+    if (!idempotencyKey) {
       ctx.status = 400;
-      ctx.body = { ok: false, error: pricing.error };
+      ctx.body = { ok: false, error: 'IDEMPOTENCY_KEY_REQUIRED' };
       return;
     }
 
-    const profile: any = await strapi.db
-      .query('api::customer-profile.customer-profile')
-      .findOne({ where: { user: userId } });
-
-    if (!profile || !profile.cpfCnpj || !profile.addressLine) {
-      ctx.status = 422;
-      ctx.body = { ok: false, error: 'PROFILE_INCOMPLETE' };
+    const redis = getRedisConnection();
+    const cachedResponse = await getIdempotencyResult<OrderCreateResponse>(redis, userId, idempotencyKey);
+    if (cachedResponse) {
+      ctx.status = 201;
+      ctx.body = cachedResponse;
       return;
     }
 
-    const user: any = await strapi.db
-      .query('plugin::users-permissions.user')
-      .findOne({ where: { id: userId } });
-
-    const order: OrderRecord = await strapi.db.query('api::order.order').create({
-      data: {
-        user: userId,
-        reference: generateOrderReference(),
-        items: pricing.items,
-        totalAmount: pricing.totalAmount,
-        status: 'pending',
-      },
-    });
-
-    const asaasConfig = readAsaasConfigFromEnv();
+    const reservation = await reserveIdempotency(redis, userId, idempotencyKey);
+    if (reservation.status === 'in-progress') {
+      ctx.status = 409;
+      ctx.body = { ok: false, error: 'CHECKOUT_IN_PROGRESS' };
+      return;
+    }
 
     try {
-      let asaasCustomerId: string | undefined = profile.asaasCustomerId;
-      if (!asaasCustomerId) {
-        const customerResult = await createAsaasCustomer(asaasConfig, {
-          name: user.username,
-          cpfCnpj: profile.cpfCnpj,
-          email: user.email,
-          phone: profile.phone || undefined,
-          postalCode: profile.postalCode,
-          addressNumber: profile.addressNumber,
-          address: profile.addressLine,
-          complement: profile.addressComplement || undefined,
-          province: profile.neighborhood,
+      const orderRepository = strapi.db.query('api::order.order');
+      const existingOrder: OrderRecord | null = await orderRepository.findOne({
+        where: { user: userId, idempotencyKey },
+      });
+
+      if (existingOrder) {
+        if (existingOrder.status === 'failed') {
+          ctx.status = 502;
+          ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
+          return;
+        }
+
+        const response = successResponse(existingOrder);
+        ctx.status = 201;
+        ctx.body = response;
+        await saveIdempotencyResult(redis, userId, idempotencyKey, response);
+        return;
+      }
+
+      const body = ctx.request.body as { items?: unknown };
+      const pricing = await resolveOrderItems(body?.items, makeProductLookup());
+      if (!pricing.ok) {
+        ctx.status = 400;
+        ctx.body = { ok: false, error: pricing.error };
+        return;
+      }
+
+      const profile: any = await strapi.db
+        .query('api::customer-profile.customer-profile')
+        .findOne({ where: { user: userId } });
+
+      if (!profile || !profile.cpfCnpj || !profile.addressLine) {
+        ctx.status = 422;
+        ctx.body = { ok: false, error: 'PROFILE_INCOMPLETE' };
+        return;
+      }
+
+      const user: any = await strapi.db
+        .query('plugin::users-permissions.user')
+        .findOne({ where: { id: userId } });
+
+      let order: OrderRecord;
+      try {
+        order = await orderRepository.create({
+          data: {
+            user: userId,
+            reference: generateOrderReference(),
+            idempotencyKey,
+            items: pricing.items,
+            totalAmount: pricing.totalAmount,
+            status: 'pending',
+          },
+        });
+      } catch (error) {
+        if (!isUniqueConstraintError(error)) {
+          throw error;
+        }
+
+        const duplicateOrder: OrderRecord | null = await orderRepository.findOne({
+          where: { user: userId, idempotencyKey },
+        });
+        if (!duplicateOrder) {
+          throw error;
+        }
+
+        if (duplicateOrder.status === 'failed') {
+          ctx.status = 502;
+          ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
+          return;
+        }
+
+        const response = successResponse(duplicateOrder);
+        ctx.status = 201;
+        ctx.body = response;
+        await saveIdempotencyResult(redis, userId, idempotencyKey, response);
+        return;
+      }
+
+      const asaasConfig = readAsaasConfigFromEnv();
+
+      try {
+        let asaasCustomerId: string | undefined = profile.asaasCustomerId;
+        if (!asaasCustomerId) {
+          const customerResult = await createAsaasCustomer(asaasConfig, {
+            name: user.username,
+            cpfCnpj: profile.cpfCnpj,
+            email: user.email,
+            phone: profile.phone || undefined,
+            postalCode: profile.postalCode,
+            addressNumber: profile.addressNumber,
+            address: profile.addressLine,
+            complement: profile.addressComplement || undefined,
+            province: profile.neighborhood,
+          });
+
+          if (!customerResult.ok) {
+            return await failOrder(order.id, 'ASAAS_UNAVAILABLE', 502, ctx);
+          }
+
+          asaasCustomerId = customerResult.data.id;
+          await strapi.db
+            .query('api::customer-profile.customer-profile')
+            .update({ where: { id: profile.id }, data: { asaasCustomerId } });
+        }
+
+        const base = frontendUrl();
+        const checkoutResult = await createAsaasCheckout(asaasConfig, {
+          customerId: asaasCustomerId,
+          externalReference: order.reference,
+          value: pricing.totalAmount,
+          description: `Pedido #${order.id}`,
+          successUrl: `${base}/pedidos/${order.reference}`,
+          cancelUrl: `${base}/checkout`,
+          expiredUrl: `${base}/checkout`,
         });
 
-        if (!customerResult.ok) {
+        if (!checkoutResult.ok) {
           return await failOrder(order.id, 'ASAAS_UNAVAILABLE', 502, ctx);
         }
 
-        asaasCustomerId = customerResult.data.id;
-        await strapi.db
-          .query('api::customer-profile.customer-profile')
-          .update({ where: { id: profile.id }, data: { asaasCustomerId } });
-      }
+        const updated: OrderRecord = await strapi.db.query('api::order.order').update({
+          where: { id: order.id },
+          data: {
+            asaasCheckoutId: checkoutResult.data.id,
+            asaasInvoiceUrl: checkoutResult.data.link,
+          },
+        });
 
-      const base = frontendUrl();
-      const checkoutResult = await createAsaasCheckout(asaasConfig, {
-        customerId: asaasCustomerId,
-        externalReference: order.reference,
-        value: pricing.totalAmount,
-        description: `Pedido #${order.id}`,
-        successUrl: `${base}/pedidos/${order.reference}`,
-        cancelUrl: `${base}/checkout`,
-        expiredUrl: `${base}/checkout`,
-      });
-
-      if (!checkoutResult.ok) {
+        const response = successResponse(updated);
+        ctx.status = 201;
+        ctx.body = response;
+        await saveIdempotencyResult(redis, userId, idempotencyKey, response);
+      } catch {
         return await failOrder(order.id, 'ASAAS_UNAVAILABLE', 502, ctx);
       }
-
-      const updated: OrderRecord = await strapi.db.query('api::order.order').update({
-        where: { id: order.id },
-        data: {
-          asaasCheckoutId: checkoutResult.data.id,
-          asaasInvoiceUrl: checkoutResult.data.link,
-        },
-      });
-
-      ctx.status = 201;
-      ctx.body = { ok: true, data: serializeOrder(updated) };
-    } catch {
-      return await failOrder(order.id, 'ASAAS_UNAVAILABLE', 502, ctx);
+    } finally {
+      if (reservation.status === 'reserved') {
+        await releaseIdempotency(redis, userId, idempotencyKey, reservation.owner);
+      }
     }
   },
 

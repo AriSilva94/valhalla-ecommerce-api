@@ -8,15 +8,29 @@
 services:
   strapi:
     environment:
+      REDIS_URL: redis://redis:6379
       SMTP_HOST: mailhog
       SMTP_PORT: 1025
       SMTP_SECURE: "false"
     depends_on:
       mailhog:
         condition: service_started
+      redis:
+        condition: service_healthy
 
   mailhog:
     image: mailhog/mailhog:v1.0.1
     restart: unless-stopped
     ports:
       - "8025:8025" # web UI — open http://localhost:8025 to read test emails
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
