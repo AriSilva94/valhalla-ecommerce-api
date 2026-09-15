@@ -174,20 +174,13 @@ export async function createAsaasCheckout(
   });
 }
 
-export async function findAsaasCheckoutByExternalReference(
+export async function cancelAsaasCheckout(
   config: AsaasConfig,
-  externalReference: string
-): Promise<AsaasApiResult<{ id: string; link: string } | null>> {
-  const result = await asaasRequest<{ data: Array<{ id: string; link: string | null }> }>(
-    config,
-    `/checkouts?externalReference=${encodeURIComponent(externalReference)}`,
-    { method: 'GET' }
-  );
-  if (!result.ok) return result;
-
-  const checkouts = Array.isArray(result.data.data) ? result.data.data : [];
-  const checkout = checkouts.find((candidate) => Boolean(candidate.id && candidate.link));
-  return checkout?.link ? { ok: true, data: { id: checkout.id, link: checkout.link } } : { ok: true, data: null };
+  checkoutId: string
+): Promise<AsaasApiResult<{ status: string }>> {
+  return asaasRequest<{ status: string }>(config, `/checkouts/${encodeURIComponent(checkoutId)}/cancel`, {
+    method: 'POST',
+  });
 }
 
 export async function findAsaasPaymentByCheckoutSession(

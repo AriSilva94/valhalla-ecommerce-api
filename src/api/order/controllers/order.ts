@@ -12,9 +12,9 @@ import { resolveOrderItems, type ProductLookup } from '../../../order/pricing';
 import { serializeOrder, type OrderRecord } from '../../../order/serialize-order';
 import { getRedisConnection } from '../../../services/redis';
 import {
+  cancelAsaasCheckout,
   createAsaasCheckout,
   createAsaasCustomer,
-  findAsaasCheckoutByExternalReference,
   findAsaasPaymentByCheckoutSession,
   readAsaasConfigFromEnv,
   simulateAsaasPixPayment,
@@ -177,29 +177,6 @@ export default {
 
         if (!hasCompletedAsaasCheckout(existingOrder)) {
           if (existingOrder.status === 'pending') {
-            const reconciliation = await findAsaasCheckoutByExternalReference(asaasConfig, existingOrder.reference);
-            if (!reconciliation.ok) {
-              logCheckoutWarning('checkout-reconciliation-failed', userId, idempotencyKey, existingOrder.id);
-              ctx.status = 503;
-              ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_UNAVAILABLE' };
-              return;
-            }
-
-            if (reconciliation.data) {
-              const reconciledOrder = await persistCheckout(existingOrder, reconciliation.data);
-              if (!reconciledOrder) {
-                ctx.status = 503;
-                ctx.body = { ok: false, error: 'CHECKOUT_PERSISTENCE_FAILED' };
-                return;
-              }
-
-              const response = successResponse(reconciledOrder);
-              ctx.status = 201;
-              ctx.body = response;
-              await saveIdempotencyResult(redis, userId, idempotencyKey, response);
-              return;
-            }
-
             if (isRecentIncompleteCheckout(existingOrder)) {
               if (reservation.status === 'reserved') {
                 resumedOrder = existingOrder;
@@ -369,6 +346,17 @@ export default {
 
         const updated = await persistCheckout(order, checkoutResult.data);
         if (!updated) {
+          try {
+            const cancellation = await cancelAsaasCheckout(asaasConfig, checkoutResult.data.id);
+            logCheckoutWarning(
+              cancellation.ok ? 'checkout-cancelled-after-persistence-failure' : 'checkout-cancel-failed',
+              userId,
+              idempotencyKey,
+              order.id
+            );
+          } catch {
+            logCheckoutWarning('checkout-cancel-failed', userId, idempotencyKey, order.id);
+          }
           ctx.status = 503;
           ctx.body = { ok: false, error: 'CHECKOUT_PERSISTENCE_FAILED' };
           return;
