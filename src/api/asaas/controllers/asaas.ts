@@ -4,6 +4,21 @@ import type { Context } from 'koa';
 
 import { mapAsaasEventToOrderStatus } from '../../../order/webhook-mapping';
 import { readAsaasConfigFromEnv, testAsaasConnection } from '../../../services/external/asaas.service';
+import { getRedisConnection } from '../../../services/redis';
+
+const WEBHOOK_DEDUP_TTL_SECONDS = 259200;
+
+async function isDuplicateWebhook(paymentId: string): Promise<boolean> {
+  const redis = getRedisConnection();
+  if (!redis) return false;
+
+  try {
+    const result = await redis.set(`webhook:asaas:${paymentId}`, '1', 'EX', WEBHOOK_DEDUP_TTL_SECONDS, 'NX');
+    return result === null;
+  } catch {
+    return false;
+  }
+}
 
 export default {
   async test(ctx: Context) {
@@ -43,6 +58,12 @@ export default {
       typeof body?.payment?.checkoutSession === 'string' ? body.payment.checkoutSession : '';
 
     const status = mapAsaasEventToOrderStatus(event);
+
+    if (status && paymentId && await isDuplicateWebhook(paymentId)) {
+      ctx.status = 200;
+      ctx.body = { ok: true };
+      return;
+    }
 
     if (status && (paymentId || externalReference || checkoutSession)) {
       const order = externalReference

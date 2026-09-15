@@ -11,6 +11,7 @@ export type OrderRecord = {
   asaasPaymentId?: string | null;
   asaasCheckoutId?: string | null;
   asaasInvoiceUrl?: string | null;
+  checkoutRecoveryStatus?: 'cancel_pending' | null;
   createdAt: string;
 };
 

@@ -4,6 +4,7 @@ import {
   testAsaasConnection,
   createAsaasCustomer,
   createAsaasCheckout,
+  cancelAsaasCheckout,
   findAsaasPaymentByCheckoutSession,
   simulateAsaasPixPayment,
 } from './asaas.service';
@@ -202,6 +203,44 @@ describe('createAsaasCheckout', () => {
       expiredUrl: 'https://loja.example.com/checkout',
     });
     expect(result).toEqual({ ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 });
+  });
+});
+
+describe('cancelAsaasCheckout', () => {
+  it('cancela o checkout pelo identificador conhecido', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ status: 'CANCELED' }),
+    });
+    global.fetch = fetchMock as any;
+
+    const result = await cancelAsaasCheckout(config, 'chk/123');
+
+    expect(result).toEqual({ ok: true, data: { status: 'CANCELED' } });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api-sandbox.asaas.com/v3/checkouts/chk%2F123/cancel',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('mantém a falha da Asaas sanitizada', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }) as any;
+
+    await expect(cancelAsaasCheckout(config, 'chk_123')).resolves.toEqual({
+      ok: false,
+      code: 'ASAAS_UNAVAILABLE',
+      status: 503,
+    });
+  });
+
+  it('trata checkout não encontrado como cancelado para permitir recuperação idempotente', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({}) }) as any;
+
+    await expect(cancelAsaasCheckout(config, 'chk_already_cancelled')).resolves.toEqual({
+      ok: true,
+      data: { status: 'ALREADY_CANCELLED' },
+    });
   });
 });
 
