@@ -25,7 +25,21 @@
     },
     "checkoutIdempotencyKey": {
       "type": "string",
+      "private": true
+    },
+    "checkoutIdempotencyScope": {
+      "type": "string",
       "unique": true,
+      "private": true,
+      "description": "Valor técnico único formado por usuário e checkoutIdempotencyKey; o Strapi 5 não declara índices compostos neste content-type."
+    },
+    "checkoutIdempotencyFingerprint": {
+      "type": "string",
+      "private": true
+    },
+    "checkoutProcessingStatus": {
+      "type": "enumeration",
+      "enum": ["processing", "completed", "failed"],
       "private": true
     },
     "items": {

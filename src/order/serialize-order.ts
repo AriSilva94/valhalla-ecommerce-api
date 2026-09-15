@@ -11,6 +11,9 @@ export type OrderRecord = {
   asaasPaymentId?: string | null;
   asaasCheckoutId?: string | null;
   asaasInvoiceUrl?: string | null;
+  checkoutIdempotencyFingerprint?: string | null;
+  checkoutIdempotencyScope?: string | null;
+  checkoutProcessingStatus?: 'processing' | 'completed' | 'failed' | null;
   createdAt: string;
 };
 
