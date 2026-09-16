@@ -2,8 +2,15 @@ import { randomBytes } from 'crypto';
 
 import type { Context } from 'koa';
 
-import { mapAsaasEventToOrderStatus } from '../../../order/webhook-mapping';
 import { readAsaasConfigFromEnv, testAsaasConnection } from '../../../services/external/asaas.service';
+import { parseAsaasWebhook } from '../../../payment/webhook-events';
+
+function isUniqueConstraintError(error: unknown): boolean {
+  const databaseError = error as { code?: unknown; errno?: unknown; message?: unknown };
+  return ['23505', 'ER_DUP_ENTRY', 'SQLITE_CONSTRAINT_UNIQUE'].includes(String(databaseError?.code ?? '')) ||
+    (String(databaseError?.code ?? '') === 'SQLITE_CONSTRAINT' && Number(databaseError?.errno) === 19) ||
+    (typeof databaseError?.message === 'string' && /unique constraint|unique violation|duplicate key/i.test(databaseError.message));
+}
 
 export default {
   async test(ctx: Context) {
@@ -31,31 +38,29 @@ export default {
   },
 
   async webhook(ctx: Context) {
-    const body = ctx.request.body as {
-      event?: unknown;
-      payment?: { id?: unknown; externalReference?: unknown; checkoutSession?: unknown };
-    };
-    const event = typeof body?.event === 'string' ? body.event : '';
-    const paymentId = typeof body?.payment?.id === 'string' ? body.payment.id : '';
-    const externalReference =
-      typeof body?.payment?.externalReference === 'string' ? body.payment.externalReference : '';
-    const checkoutSession =
-      typeof body?.payment?.checkoutSession === 'string' ? body.payment.checkoutSession : '';
+    const event = parseAsaasWebhook(ctx.request.body);
+    if (!event) return (ctx.body = { ok: true });
 
-    const status = mapAsaasEventToOrderStatus(event);
+    const eventQuery = strapi.db.query('api::payment-webhook-event.payment-webhook-event');
+    try {
+      await eventQuery.create({ data: { provider: event.provider, externalEventId: event.externalEventId, eventKey: `${event.provider}:${event.externalEventId}`, processingStatus: 'processed', processedAt: new Date().toISOString() } });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) return (ctx.body = { ok: true });
+      throw error;
+    }
 
-    if (status && (paymentId || externalReference || checkoutSession)) {
-      const order = externalReference
-        ? await strapi.db.query('api::order.order').findOne({ where: { reference: externalReference } })
-        : checkoutSession
-          ? await strapi.db.query('api::order.order').findOne({ where: { providerCheckoutId: checkoutSession } })
-          : await strapi.db.query('api::order.order').findOne({ where: { providerPaymentId: paymentId } });
+    const orderQuery = strapi.db.query('api::order.order');
+    const order = event.externalReference
+      ? await orderQuery.findOne({ where: { reference: event.externalReference } })
+      : event.providerCheckoutId
+        ? await orderQuery.findOne({ where: { providerCheckoutId: event.providerCheckoutId } })
+        : await orderQuery.findOne({ where: { providerPaymentId: event.providerPaymentId } });
 
-      if (order) {
-        const data: Record<string, unknown> = { status };
-        if (paymentId && order.providerPaymentId !== paymentId) data.providerPaymentId = paymentId;
-        await strapi.db.query('api::order.order').update({ where: { id: order.id }, data });
-      }
+    if (order) {
+      const data: Record<string, unknown> = { status: event.status };
+      if (event.providerPaymentId && order.providerPaymentId !== event.providerPaymentId) data.providerPaymentId = event.providerPaymentId;
+      const where = event.status === 'paid' ? { id: order.id } : { id: order.id, status: { $ne: 'paid' } };
+      await orderQuery.update({ where, data });
     }
 
     ctx.status = 200;
