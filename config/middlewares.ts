@@ -35,7 +35,7 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Middlewar
     },
     'strapi::poweredBy',
     'strapi::query',
-    'strapi::body',
+    { name: 'strapi::body', config: { includeUnparsed: true } },
     {
       name: 'strapi::session',
       config: {

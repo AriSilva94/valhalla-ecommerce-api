@@ -5,7 +5,7 @@
     "singularName": "order",
     "pluralName": "orders",
     "displayName": "Pedido",
-    "description": "Pedido do cliente com snapshot dos itens e cobrança Pix Asaas"
+    "description": "Pedido do cliente com snapshot dos itens e cobrança Pix"
   },
   "options": {
     "draftAndPublish": false
@@ -23,10 +23,32 @@
       "unique": true,
       "private": true
     },
-    "idempotencyKey": {
+    "checkoutIdempotencyKey": {
       "type": "string",
-      "required": true,
+      "private": true
+    },
+    "checkoutIdempotencyScope": {
+      "type": "string",
       "unique": true,
+      "private": true,
+      "description": "Valor técnico único formado por usuário e checkoutIdempotencyKey; o Strapi 5 não declara índices compostos neste content-type."
+    },
+    "checkoutIdempotencyFingerprint": {
+      "type": "string",
+      "private": true
+    },
+    "checkoutProcessingStatus": {
+      "type": "enumeration",
+      "enum": ["processing", "completed", "failed", "reconciliation_required"],
+      "private": true
+    },
+    "checkoutProcessingLeaseUntil": {
+      "type": "datetime",
+      "private": true,
+      "description": "Prazo de processamento; após expirar, o retry exige reconciliação e não repete a chamada externa."
+    },
+    "checkoutProcessingError": {
+      "type": "string",
       "private": true
     },
     "items": {
@@ -43,13 +65,11 @@
       "default": "pending",
       "required": true
     },
-    "asaasPaymentId": { "type": "string" },
-    "asaasCheckoutId": { "type": "string" },
-    "asaasInvoiceUrl": { "type": "string" },
-    "checkoutRecoveryStatus": {
-      "type": "enumeration",
-      "enum": ["cancel_pending"],
-      "private": true
-    }
+    "paymentProvider": { "type": "string", "private": true },
+    "providerPaymentId": { "type": "string", "private": true },
+    "providerCheckoutId": { "type": "string", "private": true },
+    "paymentUrl": { "type": "string" }
+    ,"paymentPixCopyPaste": { "type": "string", "private": true }
+    ,"paymentPixQrCodeUrl": { "type": "string", "private": true }
   }
 }

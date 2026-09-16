@@ -8,10 +8,18 @@ export type OrderRecord = {
   items: OrderItem[];
   totalAmount: number;
   status: OrderStatus;
-  asaasPaymentId?: string | null;
-  asaasCheckoutId?: string | null;
-  asaasInvoiceUrl?: string | null;
-  checkoutRecoveryStatus?: 'cancel_pending' | null;
+  paymentProvider?: string | null;
+  checkoutIdempotencyKey?: string | null;
+  providerPaymentId?: string | null;
+  providerCheckoutId?: string | null;
+  paymentUrl?: string | null;
+  paymentPixCopyPaste?: string | null;
+  paymentPixQrCodeUrl?: string | null;
+  checkoutIdempotencyFingerprint?: string | null;
+  checkoutIdempotencyScope?: string | null;
+  checkoutProcessingStatus?: 'processing' | 'completed' | 'failed' | 'reconciliation_required' | null;
+  checkoutProcessingLeaseUntil?: string | null;
+  checkoutProcessingError?: string | null;
   createdAt: string;
 };
 
@@ -21,6 +29,8 @@ export type SerializedOrder = {
   totalAmount: number;
   status: OrderStatus;
   checkoutUrl: string | null;
+  pixCopyPaste: string | null;
+  pixQrCodeUrl: string | null;
   createdAt: string;
 };
 
@@ -30,7 +40,9 @@ export function serializeOrder(order: OrderRecord): SerializedOrder {
     items: order.items,
     totalAmount: order.totalAmount,
     status: order.status,
-    checkoutUrl: order.asaasInvoiceUrl ?? null,
+    checkoutUrl: order.paymentUrl ?? null,
+    pixCopyPaste: order.paymentPixCopyPaste ?? null,
+    pixQrCodeUrl: order.paymentPixQrCodeUrl ?? null,
     createdAt: order.createdAt,
   };
 }

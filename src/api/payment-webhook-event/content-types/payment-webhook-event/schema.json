@@ -1,0 +1,18 @@
+{
+  "kind": "collectionType",
+  "collectionName": "payment_webhook_events",
+  "info": {
+    "singularName": "payment-webhook-event",
+    "pluralName": "payment-webhook-events",
+    "displayName": "Payment Webhook Event"
+  },
+  "options": { "draftAndPublish": false },
+  "pluginOptions": {},
+  "attributes": {
+    "provider": { "type": "string", "required": true },
+    "externalEventId": { "type": "string", "required": true },
+    "eventKey": { "type": "string", "required": true, "unique": true },
+    "processingStatus": { "type": "enumeration", "enum": ["processed", "ignored"], "required": true },
+    "processedAt": { "type": "datetime", "required": true }
+  }
+}
