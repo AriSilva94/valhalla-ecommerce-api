@@ -23,6 +23,12 @@
       "unique": true,
       "private": true
     },
+    "idempotencyKey": {
+      "type": "string",
+      "required": true,
+      "unique": true,
+      "private": true
+    },
     "items": {
       "type": "json",
       "required": true
@@ -39,6 +45,11 @@
     },
     "asaasPaymentId": { "type": "string" },
     "asaasCheckoutId": { "type": "string" },
-    "asaasInvoiceUrl": { "type": "string" }
+    "asaasInvoiceUrl": { "type": "string" },
+    "checkoutRecoveryStatus": {
+      "type": "enumeration",
+      "enum": ["cancel_pending"],
+      "private": true
+    }
   }
 }

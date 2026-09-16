@@ -81,7 +81,8 @@ export type AsaasApiResult<T> =
 async function asaasRequest<T>(
   config: AsaasConfig,
   path: string,
-  init: RequestInit
+  init: RequestInit,
+  options: { notFoundResult?: T } = {}
 ): Promise<AsaasApiResult<T>> {
   const { apiUrl, apiKey, timeoutMs, userAgent } = config;
 
@@ -106,6 +107,9 @@ async function asaasRequest<T>(
     }
     if (response.status === 403) {
       return { ok: false, code: 'ASAAS_FORBIDDEN', status: 502 };
+    }
+    if (response.status === 404 && options.notFoundResult !== undefined) {
+      return { ok: true, data: options.notFoundResult };
     }
     if (!response.ok) {
       return { ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 };
@@ -172,6 +176,18 @@ export async function createAsaasCheckout(
       items: [{ name: input.description, quantity: 1, value: input.value }],
     }),
   });
+}
+
+export async function cancelAsaasCheckout(
+  config: AsaasConfig,
+  checkoutId: string
+): Promise<AsaasApiResult<{ status: string }>> {
+  return asaasRequest<{ status: string }>(
+    config,
+    `/checkouts/${encodeURIComponent(checkoutId)}/cancel`,
+    { method: 'POST' },
+    { notFoundResult: { status: 'ALREADY_CANCELLED' } }
+  );
 }
 
 export async function findAsaasPaymentByCheckoutSession(
