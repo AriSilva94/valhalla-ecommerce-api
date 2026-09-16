@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 
 import type { Context } from 'koa';
 
@@ -51,7 +51,7 @@ function generateOrderReference(): string {
 }
 
 function readIdempotencyKey(ctx: Context): string | null {
-  const key = ctx.get('Idempotency-Key').trim();
+  const key = ctx.get('Idempotency-Key').trim().toLowerCase();
   return isUuidV4(key) ? key : null;
 }
 
@@ -75,22 +75,17 @@ function canonicalize(value: unknown): unknown {
   return value;
 }
 
-function checkoutFingerprint(rawItems: unknown): string {
-  const normalized = Array.isArray(rawItems)
-    ? rawItems.map((item) => {
-        if (!item || typeof item !== 'object') return item;
-        const value = item as Record<string, unknown>;
-        const qty = typeof value.qty === 'number' && Number.isFinite(value.qty)
-          ? Math.max(1, Math.min(10, Math.trunc(value.qty)))
-          : value.qty;
-        return { productSlug: value.productSlug, variantSku: value.variantSku, qty };
-      })
-    : rawItems;
-  return JSON.stringify(canonicalize(normalized));
+function isAcceptedCheckoutBody(value: unknown): value is { items?: unknown } {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) &&
+    Object.keys(value).every((key) => key === 'items');
+}
+
+function checkoutFingerprint(body: unknown): string {
+  return createHash('sha256').update(JSON.stringify(canonicalize(body))).digest('hex');
 }
 
 function hasSameFingerprint(order: OrderRecord, fingerprint: string): boolean {
-  return !order.checkoutIdempotencyFingerprint || order.checkoutIdempotencyFingerprint === fingerprint;
+  return Boolean(order.checkoutIdempotencyFingerprint) && order.checkoutIdempotencyFingerprint === fingerprint;
 }
 
 function isUniqueConstraintError(error: unknown): boolean {
@@ -104,29 +99,40 @@ function isUniqueConstraintError(error: unknown): boolean {
     /unique constraint|unique violation|duplicate key|er_dup_entry/i.test(databaseError.message);
 }
 
+function isCompletedOrder(order: OrderRecord): boolean {
+  return order.checkoutProcessingStatus === 'completed' &&
+    typeof order.asaasInvoiceUrl === 'string' && order.asaasInvoiceUrl.length > 0;
+}
+
 function returnExistingOrder(ctx: Context, order: OrderRecord): void {
   ctx.status = 200;
   ctx.body = { ok: true, data: serializeOrder(order) };
 }
 
 type CheckoutDependencies = { profile: any; user: any };
+const PROCESSING_LEASE_MS = 30_000;
 
-const checkoutInFlight = new Map<string, Promise<OrderRecord>>();
-
-async function markOrderFailed(orderId: number): Promise<OrderRecord> {
+async function markOrderFailed(orderId: number, errorCode = 'ASAAS_UNAVAILABLE'): Promise<OrderRecord> {
   return strapi.db.query('api::order.order').update({
     where: { id: orderId },
-    data: { status: 'failed', checkoutProcessingStatus: 'failed' },
+    data: { status: 'failed', checkoutProcessingStatus: 'failed', checkoutProcessingError: errorCode },
   });
 }
 
-async function performCheckout(
-  order: OrderRecord,
-  dependencies: CheckoutDependencies,
-  idempotencyKey: string
-): Promise<OrderRecord> {
+async function markOrderForReconciliation(orderId: number): Promise<OrderRecord> {
+  return strapi.db.query('api::order.order').update({
+    where: { id: orderId },
+    data: {
+      checkoutProcessingStatus: 'reconciliation_required',
+      checkoutProcessingError: 'CHECKOUT_RECONCILIATION_REQUIRED',
+    },
+  });
+}
+
+async function performCheckout(order: OrderRecord, dependencies: CheckoutDependencies): Promise<OrderRecord> {
   const { profile, user } = dependencies;
   const asaasConfig = readAsaasConfigFromEnv();
+  let checkoutCallStarted = false;
 
   try {
     let asaasCustomerId: string | undefined = profile.asaasCustomerId;
@@ -152,8 +158,8 @@ async function performCheckout(
     }
 
     const base = frontendUrl();
+    checkoutCallStarted = true;
     const checkoutResult = await createAsaasCheckout(asaasConfig, {
-      idempotencyKey,
       customerId: asaasCustomerId,
       externalReference: order.reference,
       value: order.totalAmount,
@@ -163,9 +169,9 @@ async function performCheckout(
       expiredUrl: `${base}/checkout`,
     });
 
-    if (!checkoutResult.ok) return markOrderFailed(order.id);
+    if (!checkoutResult.ok || !checkoutResult.data.link) return markOrderForReconciliation(order.id);
 
-    return strapi.db.query('api::order.order').update({
+    const updated = await strapi.db.query('api::order.order').update({
       where: { id: order.id },
       data: {
         asaasCheckoutId: checkoutResult.data.id,
@@ -173,27 +179,10 @@ async function performCheckout(
         checkoutProcessingStatus: 'completed',
       },
     });
+    return updated;
   } catch {
-    return markOrderFailed(order.id);
+    return checkoutCallStarted ? markOrderForReconciliation(order.id) : markOrderFailed(order.id);
   }
-}
-
-function startCheckout(
-  scope: string,
-  order: OrderRecord,
-  dependencies: CheckoutDependencies,
-  idempotencyKey: string
-): Promise<OrderRecord> {
-  const current = checkoutInFlight.get(scope);
-  if (current) return current;
-
-  const promise = Promise.resolve().then(() => performCheckout(order, dependencies, idempotencyKey));
-  checkoutInFlight.set(scope, promise);
-  void promise.then(
-    () => { if (checkoutInFlight.get(scope) === promise) checkoutInFlight.delete(scope); },
-    () => { if (checkoutInFlight.get(scope) === promise) checkoutInFlight.delete(scope); }
-  );
-  return promise;
 }
 
 export default {
@@ -208,39 +197,60 @@ export default {
       return;
     }
 
-    const body = ctx.request.body as { items?: unknown };
+    const body = ctx.request.body;
+    if (!isAcceptedCheckoutBody(body)) {
+      ctx.status = 400;
+      ctx.body = { ok: false, error: 'INVALID_CHECKOUT_PAYLOAD' };
+      return;
+    }
     const orderQuery = strapi.db.query('api::order.order');
     const scope = idempotencyScope(userId, idempotencyKey);
-    const fingerprint = checkoutFingerprint(body?.items);
+    const fingerprint = checkoutFingerprint(body);
     const existingOrder: OrderRecord | null = await orderQuery.findOne({
       where: { checkoutIdempotencyScope: scope },
     });
 
     if (existingOrder) {
+      if (!existingOrder.checkoutIdempotencyFingerprint) {
+        ctx.status = 409;
+        ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_REQUIRED' };
+        return;
+      }
       if (!hasSameFingerprint(existingOrder, fingerprint)) {
         ctx.status = 409;
         ctx.body = { ok: false, error: 'IDEMPOTENCY_KEY_REUSED' };
         return;
       }
 
-      if (existingOrder.checkoutProcessingStatus === 'processing') {
-        const profile: any = await strapi.db
-          .query('api::customer-profile.customer-profile')
-          .findOne({ where: { user: userId } });
-        const user: any = await strapi.db
-          .query('plugin::users-permissions.user')
-          .findOne({ where: { id: userId } });
-        const processed = await startCheckout(scope, existingOrder, { profile, user }, idempotencyKey);
-        if (processed.checkoutProcessingStatus === 'failed') {
-          ctx.status = 502;
-          ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
-          return;
-        }
-        returnExistingOrder(ctx, processed);
+      if (existingOrder.checkoutProcessingStatus === 'failed') {
+        ctx.status = 502;
+        ctx.body = { ok: false, error: existingOrder.checkoutProcessingError || 'ASAAS_UNAVAILABLE' };
         return;
       }
 
-      returnExistingOrder(ctx, existingOrder);
+      if (existingOrder.checkoutProcessingStatus === 'processing') {
+        const leaseUntil = existingOrder.checkoutProcessingLeaseUntil;
+        ctx.status = 409;
+        ctx.body = {
+          ok: false,
+          error: leaseUntil && Date.parse(leaseUntil) <= Date.now()
+            ? 'CHECKOUT_RECONCILIATION_REQUIRED'
+            : 'CHECKOUT_IN_PROGRESS',
+        };
+        return;
+      }
+
+      if (existingOrder.checkoutProcessingStatus === 'reconciliation_required') {
+        ctx.status = 409;
+        ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_REQUIRED' };
+        return;
+      }
+
+      if (isCompletedOrder(existingOrder)) returnExistingOrder(ctx, existingOrder);
+      else {
+        ctx.status = 409;
+        ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_REQUIRED' };
+      }
       return;
     }
 
@@ -275,6 +285,7 @@ export default {
           checkoutIdempotencyScope: scope,
           checkoutIdempotencyFingerprint: fingerprint,
           checkoutProcessingStatus: 'processing',
+          checkoutProcessingLeaseUntil: new Date(Date.now() + PROCESSING_LEASE_MS).toISOString(),
           items: pricing.items,
           totalAmount: pricing.totalAmount,
           status: 'pending',
@@ -288,6 +299,11 @@ export default {
       });
       if (!concurrentOrder) throw error;
 
+      if (!concurrentOrder.checkoutIdempotencyFingerprint) {
+        ctx.status = 409;
+        ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_REQUIRED' };
+        return;
+      }
       if (!hasSameFingerprint(concurrentOrder, fingerprint)) {
         ctx.status = 409;
         ctx.body = { ok: false, error: 'IDEMPOTENCY_KEY_REUSED' };
@@ -295,22 +311,41 @@ export default {
       }
 
       if (concurrentOrder.checkoutProcessingStatus === 'processing') {
-        const inFlight = checkoutInFlight.get(scope);
-        if (inFlight) {
-          const processed = await inFlight;
-          returnExistingOrder(ctx, processed);
-          return;
-        }
+        ctx.status = 409;
+        ctx.body = { ok: false, error: 'CHECKOUT_IN_PROGRESS' };
+        return;
       }
 
-      returnExistingOrder(ctx, concurrentOrder);
+      if (concurrentOrder.checkoutProcessingStatus === 'failed') {
+        ctx.status = 502;
+        ctx.body = { ok: false, error: concurrentOrder.checkoutProcessingError || 'ASAAS_UNAVAILABLE' };
+        return;
+      }
+
+      if (concurrentOrder.checkoutProcessingStatus === 'reconciliation_required') {
+        ctx.status = 409;
+        ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_REQUIRED' };
+        return;
+      }
+
+      if (isCompletedOrder(concurrentOrder)) returnExistingOrder(ctx, concurrentOrder);
+      else {
+        ctx.status = 409;
+        ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_REQUIRED' };
+      }
       return;
     }
 
-    const processed = await startCheckout(scope, order, { profile, user }, idempotencyKey);
+    const processed = await performCheckout(order, { profile, user });
     if (processed.checkoutProcessingStatus === 'failed') {
       ctx.status = 502;
       ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
+      return;
+    }
+
+    if (!isCompletedOrder(processed)) {
+      ctx.status = 409;
+      ctx.body = { ok: false, error: 'CHECKOUT_RECONCILIATION_REQUIRED' };
       return;
     }
 

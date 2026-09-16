@@ -13,7 +13,9 @@ export type OrderRecord = {
   asaasInvoiceUrl?: string | null;
   checkoutIdempotencyFingerprint?: string | null;
   checkoutIdempotencyScope?: string | null;
-  checkoutProcessingStatus?: 'processing' | 'completed' | 'failed' | null;
+  checkoutProcessingStatus?: 'processing' | 'completed' | 'failed' | 'reconciliation_required' | null;
+  checkoutProcessingLeaseUntil?: string | null;
+  checkoutProcessingError?: string | null;
   createdAt: string;
 };
 

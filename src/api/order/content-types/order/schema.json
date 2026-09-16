@@ -39,7 +39,16 @@
     },
     "checkoutProcessingStatus": {
       "type": "enumeration",
-      "enum": ["processing", "completed", "failed"],
+      "enum": ["processing", "completed", "failed", "reconciliation_required"],
+      "private": true
+    },
+    "checkoutProcessingLeaseUntil": {
+      "type": "datetime",
+      "private": true,
+      "description": "Prazo de processamento; após expirar, o retry exige reconciliação e não repete a chamada externa."
+    },
+    "checkoutProcessingError": {
+      "type": "string",
       "private": true
     },
     "items": {
