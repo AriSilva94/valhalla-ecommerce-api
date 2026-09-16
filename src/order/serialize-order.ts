@@ -8,9 +8,10 @@ export type OrderRecord = {
   items: OrderItem[];
   totalAmount: number;
   status: OrderStatus;
-  asaasPaymentId?: string | null;
-  asaasCheckoutId?: string | null;
-  asaasInvoiceUrl?: string | null;
+  paymentProvider?: string | null;
+  providerPaymentId?: string | null;
+  providerCheckoutId?: string | null;
+  paymentUrl?: string | null;
   checkoutIdempotencyFingerprint?: string | null;
   checkoutIdempotencyScope?: string | null;
   checkoutProcessingStatus?: 'processing' | 'completed' | 'failed' | 'reconciliation_required' | null;
@@ -34,7 +35,7 @@ export function serializeOrder(order: OrderRecord): SerializedOrder {
     items: order.items,
     totalAmount: order.totalAmount,
     status: order.status,
-    checkoutUrl: order.asaasInvoiceUrl ?? null,
+    checkoutUrl: order.paymentUrl ?? null,
     createdAt: order.createdAt,
   };
 }

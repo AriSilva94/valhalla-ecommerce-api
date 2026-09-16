@@ -5,6 +5,7 @@ import type { PaymentGateway } from './payment-gateway';
 describe('PaymentService', () => {
   it('delegates customer and checkout creation to the active gateway', async () => {
     const gateway: PaymentGateway = {
+      providerName: () => 'fake',
       createCustomer: vi.fn().mockResolvedValue({ ok: true, data: { id: 'customer-1' } }),
       createCheckout: vi.fn().mockResolvedValue({ ok: true, data: { id: 'checkout-1', url: 'https://pay.test/1' } }),
     };
@@ -20,6 +21,7 @@ describe('PaymentService', () => {
 
   it('preserves normalized gateway errors', async () => {
     const gateway: PaymentGateway = {
+      providerName: () => 'fake',
       createCustomer: vi.fn().mockResolvedValue({ ok: false, code: 'TIMEOUT' }),
       createCheckout: vi.fn(),
     };

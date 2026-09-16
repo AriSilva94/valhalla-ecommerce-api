@@ -91,7 +91,7 @@ function isUniqueConstraintError(error: unknown): boolean {
 
 function isCompletedOrder(order: OrderRecord): boolean {
   return order.checkoutProcessingStatus === 'completed' &&
-    typeof order.asaasInvoiceUrl === 'string' && order.asaasInvoiceUrl.length > 0;
+    typeof order.paymentUrl === 'string' && order.paymentUrl.length > 0;
 }
 
 function returnExistingOrder(ctx: Context, order: OrderRecord): void {
@@ -125,8 +125,8 @@ async function performCheckout(order: OrderRecord, dependencies: CheckoutDepende
   let checkoutCallStarted = false;
 
   try {
-    let asaasCustomerId: string | undefined = profile.asaasCustomerId;
-    if (!asaasCustomerId) {
+    let providerCustomerId: string | undefined = profile.paymentProviderCustomerId;
+    if (!providerCustomerId) {
       const customerResult = await paymentService.createCustomer({
         name: user.username,
         cpfCnpj: profile.cpfCnpj,
@@ -141,16 +141,16 @@ async function performCheckout(order: OrderRecord, dependencies: CheckoutDepende
 
       if (!customerResult.ok) return markOrderFailed(order.id);
 
-      asaasCustomerId = customerResult.data.id;
+      providerCustomerId = customerResult.data.id;
       await strapi.db
         .query('api::customer-profile.customer-profile')
-        .update({ where: { id: profile.id }, data: { asaasCustomerId } });
+        .update({ where: { id: profile.id }, data: { paymentProviderCustomerId: providerCustomerId } });
     }
 
     const base = frontendUrl();
     checkoutCallStarted = true;
     const checkoutResult = await paymentService.createCheckout({
-      customerId: asaasCustomerId,
+      customerId: providerCustomerId,
       externalReference: order.reference,
       value: order.totalAmount,
       description: `Pedido #${order.id}`,
@@ -164,8 +164,9 @@ async function performCheckout(order: OrderRecord, dependencies: CheckoutDepende
     const updated = await strapi.db.query('api::order.order').update({
       where: { id: order.id },
       data: {
-        asaasCheckoutId: checkoutResult.data.id,
-        asaasInvoiceUrl: checkoutResult.data.url,
+        paymentProvider: paymentService.providerName(),
+        providerCheckoutId: checkoutResult.data.id,
+        paymentUrl: checkoutResult.data.url,
         checkoutProcessingStatus: 'completed',
       },
     });
@@ -386,13 +387,13 @@ export default {
 
     if (!order) return ctx.notFound();
 
-    if (order.status !== 'pending' || !order.asaasCheckoutId) {
+    if (order.status !== 'pending' || !order.providerCheckoutId) {
       ctx.status = 409;
       ctx.body = { ok: false, error: 'ORDER_NOT_PENDING' };
       return;
     }
 
-    const paymentResult = await paymentService.findPayment(order.asaasCheckoutId);
+    const paymentResult = await paymentService.findPayment(order.providerCheckoutId);
     if (!paymentResult.ok) {
       ctx.status = 502;
       ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };

@@ -57,7 +57,7 @@ describe('customer-profile controller: me', () => {
         city: 'São Paulo',
         state: 'SP',
         postalCode: '01310100',
-        asaasCustomerId: 'cus_123',
+        paymentProviderCustomerId: 'cus_123',
       }),
     });
     await controller.me(ctx);

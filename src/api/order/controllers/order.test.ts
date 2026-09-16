@@ -76,7 +76,7 @@ const COMPLETE_PROFILE = {
   city: 'São Paulo',
   state: 'SP',
   postalCode: '01310100',
-  asaasCustomerId: 'cus_existing',
+  paymentProviderCustomerId: 'cus_existing',
 };
 
 const PRODUCT = {
@@ -122,7 +122,7 @@ describe('order controller: create', () => {
       totalAmount: 100,
       status: 'pending',
       checkoutProcessingStatus: 'completed',
-      asaasInvoiceUrl: 'https://sandbox.asaas.com/checkout/existing',
+      paymentUrl: 'https://sandbox.asaas.com/checkout/existing',
       createdAt: '2026-09-12T10:00:00.000Z',
     };
     const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] }, {}, { 'Idempotency-Key': key });
@@ -226,7 +226,7 @@ describe('order controller: create', () => {
       status: 'pending',
       createdAt: '2026-09-12T10:00:00.000Z',
     };
-    const completedOrder = { ...processingOrder, checkoutProcessingStatus: 'completed', asaasInvoiceUrl: 'https://sandbox.asaas.com/checkout/shared' };
+    const completedOrder = { ...processingOrder, checkoutProcessingStatus: 'completed', paymentUrl: 'https://sandbox.asaas.com/checkout/shared' };
     let resolveCheckout!: (value: any) => void;
     const checkoutBlocked = new Promise((resolve) => { resolveCheckout = resolve; });
     let findOneCalls = 0;
@@ -277,7 +277,7 @@ describe('order controller: create', () => {
       items: [{ productSlug: 'iphone-15', productName: 'iPhone 15', variantSku: 'S1', colorName: 'Preto', configLabel: '128GB', unitPrice: 100, qty: 1 }],
       totalAmount: 100,
       status: 'pending',
-      asaasInvoiceUrl: 'https://sandbox.asaas.com/checkout/persisted',
+      paymentUrl: 'https://sandbox.asaas.com/checkout/persisted',
       createdAt: '2026-09-12T10:00:00.000Z',
     };
     const strapiMock = buildStrapiForCreate({ profile: COMPLETE_PROFILE, existingOrder });
@@ -357,7 +357,7 @@ describe('order controller: create', () => {
       reference: 'decimal-fingerprint',
       checkoutIdempotencyFingerprint: createHash('sha256').update(JSON.stringify({ items: [{ productSlug: 'iphone-15', qty: 1, variantSku: 'S1' }] })).digest('hex'),
       checkoutProcessingStatus: 'completed',
-      asaasInvoiceUrl: 'https://sandbox.asaas.com/checkout/decimal',
+      paymentUrl: 'https://sandbox.asaas.com/checkout/decimal',
       createdAt: '2026-09-12T10:00:00.000Z',
     };
     const strapiMock = buildStrapiForCreate({ existingOrder });
@@ -446,7 +446,7 @@ describe('order controller: create', () => {
       data: { id: 'chk_2', link: 'https://sandbox.asaas.com/checkoutSession/show/chk_2' },
     });
 
-    const profileWithoutCustomerId = { ...COMPLETE_PROFILE, asaasCustomerId: undefined };
+    const profileWithoutCustomerId = { ...COMPLETE_PROFILE, paymentProviderCustomerId: undefined };
     const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
     const strapiMock = buildStrapiForCreate({ product: PRODUCT, profile: profileWithoutCustomerId });
     (globalThis as any).strapi = strapiMock;
@@ -456,7 +456,7 @@ describe('order controller: create', () => {
     expect(asaas.createAsaasCustomer).toHaveBeenCalled();
     expect(strapiMock.db.query('api::customer-profile.customer-profile').update).toHaveBeenCalledWith({
       where: { id: profileWithoutCustomerId.id },
-      data: { asaasCustomerId: 'cus_new' },
+      data: { paymentProviderCustomerId: 'cus_new' },
     });
     expect(ctx.status).toBe(201);
   });
@@ -464,7 +464,7 @@ describe('order controller: create', () => {
   it('marca o pedido como failed quando a criação do customer na Asaas falha', async () => {
     (asaas.createAsaasCustomer as any).mockResolvedValue({ ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 });
 
-    const profileWithoutCustomerId = { ...COMPLETE_PROFILE, asaasCustomerId: undefined };
+    const profileWithoutCustomerId = { ...COMPLETE_PROFILE, paymentProviderCustomerId: undefined };
     const ctx = buildCtx(1, { items: [{ productSlug: 'iphone-15', variantSku: 'S1', qty: 1 }] });
     const strapiMock = buildStrapiForCreate({ product: PRODUCT, profile: profileWithoutCustomerId });
     (globalThis as any).strapi = strapiMock;
@@ -541,7 +541,7 @@ describe('order controller: simulatePayment', () => {
 
   it('retorna 409 ORDER_NOT_PENDING quando o pedido já não está pending', async () => {
     const ctx = buildCtx(1, {}, { id: 'abc123def4' });
-    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'paid', asaasCheckoutId: 'chk_1' });
+    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'paid', providerCheckoutId: 'chk_1' });
     (globalThis as any).strapi = { db: { query: () => ({ findOne }) } };
 
     await controller.simulatePayment(ctx);
@@ -552,7 +552,7 @@ describe('order controller: simulatePayment', () => {
 
   it('retorna 409 quando o pedido ainda não tem asaasCheckoutId', async () => {
     const ctx = buildCtx(1, {}, { id: 'abc123def4' });
-    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'pending', asaasCheckoutId: null });
+    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'pending', providerCheckoutId: null });
     (globalThis as any).strapi = { db: { query: () => ({ findOne }) } };
 
     await controller.simulatePayment(ctx);
@@ -563,7 +563,7 @@ describe('order controller: simulatePayment', () => {
   it('retorna 409 PAYMENT_NOT_READY quando a Asaas ainda não gerou o pagamento', async () => {
     (asaas.findAsaasPaymentByCheckoutSession as any).mockResolvedValue({ ok: true, data: null });
     const ctx = buildCtx(1, {}, { id: 'abc123def4' });
-    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'pending', asaasCheckoutId: 'chk_1' });
+    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'pending', providerCheckoutId: 'chk_1' });
     (globalThis as any).strapi = { db: { query: () => ({ findOne }) } };
 
     await controller.simulatePayment(ctx);
@@ -576,7 +576,7 @@ describe('order controller: simulatePayment', () => {
     (asaas.findAsaasPaymentByCheckoutSession as any).mockResolvedValue({ ok: true, data: { id: 'pay_1' } });
     (asaas.simulateAsaasPixPayment as any).mockResolvedValue({ ok: true, data: { status: 'RECEIVED' } });
     const ctx = buildCtx(1, {}, { id: 'abc123def4' });
-    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'pending', asaasCheckoutId: 'chk_1' });
+    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'pending', providerCheckoutId: 'chk_1' });
     (globalThis as any).strapi = { db: { query: () => ({ findOne }) } };
 
     await controller.simulatePayment(ctx);
@@ -590,7 +590,7 @@ describe('order controller: simulatePayment', () => {
     (asaas.findAsaasPaymentByCheckoutSession as any).mockResolvedValue({ ok: true, data: { id: 'pay_1' } });
     (asaas.simulateAsaasPixPayment as any).mockResolvedValue({ ok: false, code: 'ASAAS_UNAVAILABLE', status: 503 });
     const ctx = buildCtx(1, {}, { id: 'abc123def4' });
-    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'pending', asaasCheckoutId: 'chk_1' });
+    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'pending', providerCheckoutId: 'chk_1' });
     (globalThis as any).strapi = { db: { query: () => ({ findOne }) } };
 
     await controller.simulatePayment(ctx);

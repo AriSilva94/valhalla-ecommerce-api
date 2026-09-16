@@ -48,12 +48,12 @@ export default {
       const order = externalReference
         ? await strapi.db.query('api::order.order').findOne({ where: { reference: externalReference } })
         : checkoutSession
-          ? await strapi.db.query('api::order.order').findOne({ where: { asaasCheckoutId: checkoutSession } })
-          : await strapi.db.query('api::order.order').findOne({ where: { asaasPaymentId: paymentId } });
+          ? await strapi.db.query('api::order.order').findOne({ where: { providerCheckoutId: checkoutSession } })
+          : await strapi.db.query('api::order.order').findOne({ where: { providerPaymentId: paymentId } });
 
       if (order) {
         const data: Record<string, unknown> = { status };
-        if (paymentId && order.asaasPaymentId !== paymentId) data.asaasPaymentId = paymentId;
+        if (paymentId && order.providerPaymentId !== paymentId) data.providerPaymentId = paymentId;
         await strapi.db.query('api::order.order').update({ where: { id: order.id }, data });
       }
     }

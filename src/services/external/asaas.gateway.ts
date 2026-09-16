@@ -22,6 +22,10 @@ function mapError(code: string): 'AUTH_FAILED' | 'FORBIDDEN' | 'TIMEOUT' | 'UNAV
 export class AsaasGateway implements PaymentGateway {
   constructor(private readonly config: AsaasConfig) {}
 
+  providerName(): string {
+    return 'asaas';
+  }
+
   async createCustomer(input: PaymentCustomer): Promise<PaymentResult<{ id: string }>> {
     const result = await createAsaasCustomer(this.config, input);
     return result.ok ? result : { ok: false, code: mapError(result.code) };

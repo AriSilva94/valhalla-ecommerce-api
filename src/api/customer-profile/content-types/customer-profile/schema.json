@@ -5,7 +5,7 @@
     "singularName": "customer-profile",
     "pluralName": "customer-profiles",
     "displayName": "Perfil do Cliente",
-    "description": "CPF/CNPJ, endereço e id Asaas do cliente autenticado"
+    "description": "CPF/CNPJ, endereço e identificador do cliente no gateway ativo"
   },
   "options": {
     "draftAndPublish": false
@@ -26,6 +26,6 @@
     "city": { "type": "string" },
     "state": { "type": "string" },
     "postalCode": { "type": "string" },
-    "asaasCustomerId": { "type": "string" }
+    "paymentProviderCustomerId": { "type": "string", "private": true }
   }
 }

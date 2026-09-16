@@ -27,6 +27,7 @@ export type PaymentResult<T> =
   | { ok: false; code: PaymentGatewayErrorCode };
 
 export interface PaymentGateway {
+  providerName(): string;
   createCustomer(input: PaymentCustomer): Promise<PaymentResult<{ id: string }>>;
   createCheckout(input: PaymentCheckout): Promise<PaymentResult<{ id: string; url: string }>>;
   findPayment(checkoutId: string): Promise<PaymentResult<{ id: string } | null>>;

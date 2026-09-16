@@ -9,6 +9,10 @@ export class PaymentService {
     return this.gateway.createCustomer(input);
   }
 
+  providerName() {
+    return this.gateway.providerName();
+  }
+
   createCheckout(input: PaymentCheckout) {
     return this.gateway.createCheckout(input);
   }

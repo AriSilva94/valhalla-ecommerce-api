@@ -9,9 +9,9 @@ describe('serializeOrder', () => {
       items: [{ productSlug: 'x', productName: 'X', variantSku: 'S', colorName: 'C', configLabel: 'L', unitPrice: 10, qty: 2 }],
       totalAmount: 20,
       status: 'pending',
-      asaasPaymentId: 'pay_123',
-      asaasCheckoutId: 'chk_123',
-      asaasInvoiceUrl: 'https://sandbox.asaas.com/checkoutSession/show/chk_123',
+      providerPaymentId: 'pay_123',
+      providerCheckoutId: 'chk_123',
+      paymentUrl: 'https://sandbox.asaas.com/checkoutSession/show/chk_123',
       createdAt: '2026-09-12T10:00:00.000Z',
     });
 
