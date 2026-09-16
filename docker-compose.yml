@@ -58,6 +58,13 @@ services:
       ASAAS_TEST_TOKEN: ${ASAAS_TEST_TOKEN:-}
       ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
       CHECKOUT_PUBLIC_URL: ${CHECKOUT_PUBLIC_URL:-}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-asaas}
+      DFLOW_API_URL: ${DFLOW_API_URL:-https://api.deflow.exchange/v1}
+      DFLOW_KEY_ID: ${DFLOW_KEY_ID:-}
+      DFLOW_SECRET: ${DFLOW_SECRET:-}
+      DFLOW_PASSPHRASE: ${DFLOW_PASSPHRASE:-}
+      DFLOW_WEBHOOK_SECRET: ${DFLOW_WEBHOOK_SECRET:-}
+      DFLOW_TIMEOUT_MS: ${DFLOW_TIMEOUT_MS:-10000}
     volumes:
       - strapi-uploads:/opt/app/public/uploads
     ports:
