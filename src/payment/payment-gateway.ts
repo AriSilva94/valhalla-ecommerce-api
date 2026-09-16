@@ -11,6 +11,8 @@ export type PaymentCustomer = {
 };
 
 export type PaymentCheckout = {
+  idempotencyKey: string;
+  payerTaxNumber: string;
   customerId: string;
   externalReference: string;
   value: number;
@@ -29,7 +31,7 @@ export type PaymentResult<T> =
 export interface PaymentGateway {
   providerName(): string;
   createCustomer(input: PaymentCustomer): Promise<PaymentResult<{ id: string }>>;
-  createCheckout(input: PaymentCheckout): Promise<PaymentResult<{ id: string; url: string }>>;
+  createCheckout(input: PaymentCheckout): Promise<PaymentResult<{ id: string; url: string | null; pixCopyPaste?: string | null; pixQrCodeUrl?: string | null }>>;
   findPayment(checkoutId: string): Promise<PaymentResult<{ id: string } | null>>;
   simulatePayment(paymentId: string): Promise<PaymentResult<{ status: string }>>;
   isSandbox(): boolean;

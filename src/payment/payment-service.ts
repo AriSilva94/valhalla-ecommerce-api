@@ -1,6 +1,7 @@
 import type { PaymentCustomer, PaymentGateway, PaymentCheckout } from './payment-gateway';
 import { AsaasGateway } from '../services/external/asaas.gateway';
 import { readAsaasConfigFromEnv } from '../services/external/asaas.service';
+import { DeflowGateway, readDeflowConfigFromEnv } from '../services/external/deflow.gateway';
 
 export class PaymentService {
   constructor(private readonly gateway: PaymentGateway) {}
@@ -31,5 +32,8 @@ export class PaymentService {
 }
 
 export function createPaymentService(): PaymentService {
+  if ((process.env.PAYMENT_PROVIDER || 'asaas').toLowerCase() === 'deflow') {
+    return new PaymentService(new DeflowGateway(readDeflowConfigFromEnv()));
+  }
   return new PaymentService(new AsaasGateway(readAsaasConfigFromEnv()));
 }

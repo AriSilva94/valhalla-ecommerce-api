@@ -91,7 +91,8 @@ function isUniqueConstraintError(error: unknown): boolean {
 
 function isCompletedOrder(order: OrderRecord): boolean {
   return order.checkoutProcessingStatus === 'completed' &&
-    typeof order.paymentUrl === 'string' && order.paymentUrl.length > 0;
+    ((typeof order.paymentUrl === 'string' && order.paymentUrl.length > 0) ||
+      (typeof order.paymentPixCopyPaste === 'string' && order.paymentPixCopyPaste.length > 0));
 }
 
 function returnExistingOrder(ctx: Context, order: OrderRecord): void {
@@ -150,6 +151,8 @@ async function performCheckout(order: OrderRecord, dependencies: CheckoutDepende
     const base = frontendUrl();
     checkoutCallStarted = true;
     const checkoutResult = await paymentService.createCheckout({
+      idempotencyKey: order.checkoutIdempotencyKey!,
+      payerTaxNumber: profile.cpfCnpj,
       customerId: providerCustomerId,
       externalReference: order.reference,
       value: order.totalAmount,
@@ -159,7 +162,7 @@ async function performCheckout(order: OrderRecord, dependencies: CheckoutDepende
       expiredUrl: `${base}/checkout`,
     });
 
-    if (!checkoutResult.ok || !checkoutResult.data.url) return markOrderForReconciliation(order.id);
+    if (!checkoutResult.ok || (!checkoutResult.data.url && !checkoutResult.data.pixCopyPaste)) return markOrderForReconciliation(order.id);
 
     const updated = await strapi.db.query('api::order.order').update({
       where: { id: order.id },
@@ -167,6 +170,8 @@ async function performCheckout(order: OrderRecord, dependencies: CheckoutDepende
         paymentProvider: paymentService.providerName(),
         providerCheckoutId: checkoutResult.data.id,
         paymentUrl: checkoutResult.data.url,
+        paymentPixCopyPaste: checkoutResult.data.pixCopyPaste ?? null,
+        paymentPixQrCodeUrl: checkoutResult.data.pixQrCodeUrl ?? null,
         checkoutProcessingStatus: 'completed',
       },
     });

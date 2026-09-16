@@ -69,5 +69,7 @@
     "providerPaymentId": { "type": "string", "private": true },
     "providerCheckoutId": { "type": "string", "private": true },
     "paymentUrl": { "type": "string" }
+    ,"paymentPixCopyPaste": { "type": "string", "private": true }
+    ,"paymentPixQrCodeUrl": { "type": "string", "private": true }
   }
 }

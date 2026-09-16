@@ -19,13 +19,13 @@ describe('AsaasGateway', () => {
 
     await expect(gateway.createCustomer({ name: 'Cliente', cpfCnpj: '1', email: 'a@b.test', postalCode: '1', addressNumber: '1', address: 'Rua', province: 'Centro' }))
       .resolves.toEqual({ ok: true, data: { id: 'cus-1' } });
-    await expect(gateway.createCheckout({ customerId: 'cus-1', externalReference: 'order-1', value: 100, description: 'Pedido', successUrl: 'https://site.test/s', cancelUrl: 'https://site.test/c', expiredUrl: 'https://site.test/e' }))
+    await expect(gateway.createCheckout({ idempotencyKey: '550e8400-e29b-41d4-a716-446655440010', payerTaxNumber: '11144477735', customerId: 'cus-1', externalReference: 'order-1', value: 100, description: 'Pedido', successUrl: 'https://site.test/s', cancelUrl: 'https://site.test/c', expiredUrl: 'https://site.test/e' }))
       .resolves.toEqual({ ok: true, data: { id: 'chk-1', url: 'https://asaas.test/chk-1' } });
   });
 
   it('normaliza erros do adapter', async () => {
     vi.mocked(asaas.createAsaasCheckout).mockResolvedValue({ ok: false, code: 'ASAAS_TIMEOUT', status: 504 });
-    await expect(new AsaasGateway(config).createCheckout({ customerId: 'cus-1', externalReference: 'order-1', value: 100, description: 'Pedido', successUrl: 'https://site.test/s', cancelUrl: 'https://site.test/c', expiredUrl: 'https://site.test/e' }))
+    await expect(new AsaasGateway(config).createCheckout({ idempotencyKey: '550e8400-e29b-41d4-a716-446655440010', payerTaxNumber: '11144477735', customerId: 'cus-1', externalReference: 'order-1', value: 100, description: 'Pedido', successUrl: 'https://site.test/s', cancelUrl: 'https://site.test/c', expiredUrl: 'https://site.test/e' }))
       .resolves.toEqual({ ok: false, code: 'TIMEOUT' });
   });
 });

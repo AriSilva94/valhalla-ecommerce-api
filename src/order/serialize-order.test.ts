@@ -21,6 +21,8 @@ describe('serializeOrder', () => {
       totalAmount: 20,
       status: 'pending',
       checkoutUrl: 'https://sandbox.asaas.com/checkoutSession/show/chk_123',
+      pixCopyPaste: null,
+      pixQrCodeUrl: null,
       createdAt: '2026-09-12T10:00:00.000Z',
     });
     expect((result as any).asaasPaymentId).toBeUndefined();
