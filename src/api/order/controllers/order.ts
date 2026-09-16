@@ -4,17 +4,7 @@ import type { Context } from 'koa';
 
 import { resolveOrderItems, type ProductLookup } from '../../../order/pricing';
 import { serializeOrder, type OrderRecord } from '../../../order/serialize-order';
-import {
-  createAsaasCheckout,
-  createAsaasCustomer,
-  findAsaasPaymentByCheckoutSession,
-  readAsaasConfigFromEnv,
-  simulateAsaasPixPayment,
-} from '../../../services/external/asaas.service';
-
-function isSandboxAsaasConfig(apiUrl: string): boolean {
-  return apiUrl.includes('sandbox');
-}
+import { createPaymentService } from '../../../payment/payment-service';
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
@@ -131,13 +121,13 @@ async function markOrderForReconciliation(orderId: number): Promise<OrderRecord>
 
 async function performCheckout(order: OrderRecord, dependencies: CheckoutDependencies): Promise<OrderRecord> {
   const { profile, user } = dependencies;
-  const asaasConfig = readAsaasConfigFromEnv();
+  const paymentService = createPaymentService();
   let checkoutCallStarted = false;
 
   try {
     let asaasCustomerId: string | undefined = profile.asaasCustomerId;
     if (!asaasCustomerId) {
-      const customerResult = await createAsaasCustomer(asaasConfig, {
+      const customerResult = await paymentService.createCustomer({
         name: user.username,
         cpfCnpj: profile.cpfCnpj,
         email: user.email,
@@ -159,7 +149,7 @@ async function performCheckout(order: OrderRecord, dependencies: CheckoutDepende
 
     const base = frontendUrl();
     checkoutCallStarted = true;
-    const checkoutResult = await createAsaasCheckout(asaasConfig, {
+    const checkoutResult = await paymentService.createCheckout({
       customerId: asaasCustomerId,
       externalReference: order.reference,
       value: order.totalAmount,
@@ -169,13 +159,13 @@ async function performCheckout(order: OrderRecord, dependencies: CheckoutDepende
       expiredUrl: `${base}/checkout`,
     });
 
-    if (!checkoutResult.ok || !checkoutResult.data.link) return markOrderForReconciliation(order.id);
+    if (!checkoutResult.ok || !checkoutResult.data.url) return markOrderForReconciliation(order.id);
 
     const updated = await strapi.db.query('api::order.order').update({
       where: { id: order.id },
       data: {
         asaasCheckoutId: checkoutResult.data.id,
-        asaasInvoiceUrl: checkoutResult.data.link,
+        asaasInvoiceUrl: checkoutResult.data.url,
         checkoutProcessingStatus: 'completed',
       },
     });
@@ -382,8 +372,8 @@ export default {
     const userId = ctx.state.user?.id;
     if (!userId) return ctx.unauthorized();
 
-    const asaasConfig = readAsaasConfigFromEnv();
-    if (!isSandboxAsaasConfig(asaasConfig.apiUrl)) {
+    const paymentService = createPaymentService();
+    if (!paymentService.isSandbox()) {
       ctx.status = 403;
       ctx.body = { ok: false, error: 'SANDBOX_ONLY' };
       return;
@@ -402,7 +392,7 @@ export default {
       return;
     }
 
-    const paymentResult = await findAsaasPaymentByCheckoutSession(asaasConfig, order.asaasCheckoutId);
+    const paymentResult = await paymentService.findPayment(order.asaasCheckoutId);
     if (!paymentResult.ok) {
       ctx.status = 502;
       ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
@@ -415,7 +405,7 @@ export default {
       return;
     }
 
-    const confirmResult = await simulateAsaasPixPayment(asaasConfig, paymentResult.data.id);
+    const confirmResult = await paymentService.simulatePayment(paymentResult.data.id);
     if (!confirmResult.ok) {
       ctx.status = 502;
       ctx.body = { ok: false, error: 'ASAAS_UNAVAILABLE' };
