@@ -34,5 +34,8 @@ Pedidos devem guardar provedor, identificador externo e valor bruto esperado. Ev
 - `DFLOW_KEY_ID`, `DFLOW_SECRET` e opcionalmente `DFLOW_PASSPHRASE` são server-side.
 - `DFLOW_WEBHOOK_SECRET` valida `DF-Signature` sobre o corpo bruto, com tolerância de cinco minutos.
 - `DFLOW_TIMEOUT_MS` controla o timeout HTTP.
+- `DFLOW_TEST_PAYER_TAX_NUMBER` é usado somente pelo teste controlado de sandbox.
 
 O adapter usa `POST /deposit/create` com a mesma chave UUID persistida internamente, retornando `qrCopyPaste` e `qrImageUrl`. O endpoint sandbox `POST /sandbox/deposit/:id/mark-paid` é usado apenas pela ação de simulação.
+
+Para executar o smoke test: `npm run test:deflow:sandbox`. Ele exige `DFLOW_KEY_ID` com prefixo `dfk_test_`, `DFLOW_SECRET` e `DFLOW_TEST_PAYER_TAX_NUMBER`. A execução ainda não foi feita neste ambiente porque essas credenciais não estão configuradas.
